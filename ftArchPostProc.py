@@ -84,7 +84,9 @@ class InstData(object):
         else:
             self._df = pd.DataFrame(df)
 
-
+    def __repr__(self):
+        return("Name: " + self._name + "\nX axis: " + self._xName + "\nY axis: " +
+                self._yName + "\nData:\n" + str(self._df) + "\n")
 
 
     # read only properties
@@ -117,7 +119,8 @@ class InstData(object):
         print('Now is the time for all good men'.partition(' '))
         print('Now is the time for all good men'.rpartition(' '))
         print(len(headerList))
-
+        for idx, val in enumerate(headerList):
+            print(idx, val)
 
 # **** argument parsing
 # define the arguments
@@ -176,14 +179,46 @@ args = parser.parse_args()
 # args.a                True/False  Archive data input file type when set
 # args.encoding         string      File encoding. Default is utf_16.
 
-# Read the first couple rows to establish the columns and headers
+# Read the csv file into a data frame.  The first row is treated as the header
 dframe = pd.read_csv(args.inputFileName, sep=args.delimiter, 
                     delim_whitespace=False, encoding=args.encoding, header=0, 
                     skipinitialspace=True, nrows= 5)
-#print(dframe)
+# put the headers into a list
+headerList = dframe.columns.values.tolist()
+# make s spot for a list of InstData objects
+instData = []
+
 print('****')
-sammy = InstData("Samuel", df=dframe)
-sammy.printdf()
+print(headerList)
+
+# Iterate thru the header list.
+# Create desired column names: value_<instName> and timestamp_<instName>
+# Create a instrument data object with data sliced from the big data frame
+
+for idx in range(0, len(headerList), 2):
+    # For each header entry, make instrument and timestamp column names.
+    # Even indexes are timestamps, odd indexes are values.
+    # even index ... timestamp
+    # get the inst name, leaving off the bit after the last space, which is
+    # normally 'Time'
+    instName = headerList[idx].rpartition(' ')[0] # returns a tuple: first, separator, last
+    # replace the spaces with underscores
+    instName = instName.replace(' ', '_')
+    # generate timestamp and value field (column) names
+    tsName = 'timestamp_' + instName 
+    valName = 'value_' + instName
+    # create a new dataframe for the instrument
+    iDframe = pd.DataFrame(dframe.iloc[:,[idx,idx+1]], 
+                           columns=[tsName, valName],
+                           dtype={tsName: 'datetime64', valName: 'float'})
+    iDframe.set_index(tsName, inplace=true)
+    instData.append(InstData(instName, valName, tsName, iDframe))
+    print(iDframe.dtypes)
+
+    # instrument data object, and append it to the list
+for instr in instData:
+    print(instr.name)
+    print(instr)
 print('****')
 # Prepare to read from the file. Create dictionaries for data types and header
 # values (if needed) depending on input file type.
