@@ -56,38 +56,101 @@ import argparse
 import numpy as np
 import pandas as pd
 
-# create an instrument data class.
+# create a TimeStamp Indexed data class
 # TODO: Put this def in a module and import it
-class InstData(object):
-    def __init__(self, iName, xName=None, yName=None, df=None):
-        self._name = iName
+class TsIdxData(object):
+    def __init__(self, name, tsName=None, yName=None, df=None, fs=None):
+        self._name = str(name) # use the string version
 
-        # default x values to the name value if nothing is specified
-        if xName is None:
-            self._xName = iName
+        # default x-axis (timestamp) label to 'timestamp' if nothing is specified
+        if tsName is None:
+            self._tsName = 'timestamp'
         else:
-           self._xName = str(xName) # use the string version
+           self._tsName = str(tsName) # use the string version
 
-        # default the y values to 'timestamp' if nothing is specified
+        # default the y-axis label to the name if nothing is specified
         if yName is None:
-            self._yName = 'timestamp'
+            self._yName = name
         else:
            self._yName = str(yName) # use the string version
 
         # Keep the column (header) names as a property
-        self._columns = [self._xName, self._yName]
+        self._columns = [self._tsName, self._yName]
+
+        # 
 
         # default dataframe to empty if not specified
         if df is None:
             # create an empty data frame with the column names
-            self._df = pd.DataFrame(columns= self._columns)
+            self._df = pd.DataFrame(columns=[self._tsName, self._yName])
+            # force the columns to have the data types of datetime and float
+            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
+                                                    errors='coerce')
+            self._df[self._yName] = self._df[self._yName].astype('float',
+                                                    errors='ignore')
+            # set the timestamp as the index
+            self._df.set_index(self._tsName, inplace=True)
+
+            # **** statistics -- set to 0
+            # get the start and end timestamps
+            self._startTs = '01/01/1970 00:00:00'
+            self._endTs = '01/01/1970 00:00:00'
+
+            # get the count, min, max, median, mean
+            # median values
+            self._count = 0
+            self._min = 0
+            self._max = 0
+            self._median = 0
+            self._mean = 0
         else:
-            self._df = pd.DataFrame(df)
+            # set the data frame with the specified data frame
+            self._df = pd.DataFrame(data=df)
+            self._df.columns=[self._tsName, self._yName]
+            # the ts axis will be the index, so get rid of any NaN values
+            self._df.dropna(subset=[self._tsName], inplace=True)
+            # get rid of Nan from the values (y-axis)
+            # not strictly necessary, but lack of NaN values tends to make
+            # follow on data analysis less problematic
+            self._df.dropna(subset=[self._yName], inplace=True)
+            # force the columns to have the data types of datetime and float
+            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
+                                                    errors='coerce')
+            self._df[self._yName] = self._df[self._yName].astype('float',
+                                                    errors='ignore')
+            # set the timestamp as the index
+            self._df.set_index(self._tsName, inplace=True)
+
+            # **** statistics
+            # get the start and end timestamps
+            self._startTs = self._df.index.min()
+            self._endTs = self._df.index.max()
+
+            # get the count, min, max, mean, median values
+            self._count = self._df[self._yName].count()
+            self._min = self._df[self._yName].min()
+            self._max = self._df[self._yName].max()
+            self._median = self._df[self._yName].median()
+            self._mean = self._df[self._yName].mean()
 
     def __repr__(self):
-        return("Name: " + self._name + "\nX axis: " + self._xName + "\nY axis: " +
-                self._yName + "\nData:\n" + str(self._df) + "\n")
+        colList= list(self._df.columns.values)
+        outputMsg=  '{:8} {}'.format('Name:', self._name + '\n')
 
+        outputMsg+= '{:8} {:18} {:10} {}'.format('Index: ', self._df.index.name, \
+'datatype: ', str(self._df.index.dtype) + '\n')
+        outputMsg+= '{:8} {:18} {:10} {}'.format('Y axis: ', str(colList[0]), \
+'datatype: ', str(self._df[colList[0]].dtype) + '\n\n')
+        outputMsg+= '{:14} {}'.format('Start Time: ', str(self._startTs) + '\n')
+        outputMsg+= '{:14} {}'.format('End Time: ', str(self._endTs) + '\n')
+        outputMsg+= '{:14} {}'.format('Value Count: ', str(self._count) + '\n')
+        outputMsg+= '{:14} {}'.format('Min Value: ', str(self._min) + '\n')
+        outputMsg+= '{:14} {}'.format('Max Value: ', str(self._max) + '\n')
+        outputMsg+= '{:14} {}'.format('Median Value: ', str(self._median) + '\n')
+        outputMsg+= '{:14} {}'.format('Mean Value: ', str(self._mean) + '\n')
+        
+        outputMsg+= str(self._df) + '\n'
+        return(outputMsg)
 
     # read only properties
     @property
@@ -95,8 +158,8 @@ class InstData(object):
         return self._name
 
     @property
-    def xName(self):
-        return self._xName
+    def tsName(self):
+        return self._tsName
            
     @property
     def yName(self):
@@ -106,21 +169,34 @@ class InstData(object):
     def columns(self):
         return self._columns
 
-    def printdf(self):
-        print(self.name)
-        print(self.xName)
-        print(self.yName)
-        print(self.columns)
-        print(self._df)
-        headerList = self._df.columns.values.tolist()
-        print(headerList)
-        print(headerList[0])
-        print(headerList[0].partition(' '))
-        print('Now is the time for all good men'.partition(' '))
-        print('Now is the time for all good men'.rpartition(' '))
-        print(len(headerList))
-        for idx, val in enumerate(headerList):
-            print(idx, val)
+    @property
+    def startTs(self):
+        return self._startTs
+
+    @property
+    def endTs(self):
+        return self._endTs
+
+    @property
+    def count(self):
+        return self._count
+
+    @property
+    def min(self):
+        return self._min
+
+    @property
+    def max(self):
+        return self._max
+
+    @property
+    def median(self):
+        return self._median
+
+    @property
+    def mean(self):
+        return self._mean
+
 
 # **** argument parsing
 # define the arguments
@@ -146,6 +222,10 @@ used, it can be specified with the -d or --delimiter option.
 Normally, the first row is assumed to be header data (names).
 The -noheader option will treat the first row as data (no header).
 
+If the data contains sentinel value entries, and they are not desired, they can
+be removed from the data by specifying a string with the -fs or
+--filterSentinel option.
+
 File encoding can be specified with the -e or -encoding option.  Default
 encoding is utf_16.\n """
 
@@ -157,10 +237,13 @@ parser.add_argument('inputFileName', help='Input data file (csv)')
 parser.add_argument('outputFileName', help= 'Output data file (csv)')
 parser.add_argument('-noheader', action='store_true', default=False, \
                    help='Input file does not contain headers.')
-parser.add_argument('-d', '--delimiter', default=",", metavar='', \
+parser.add_argument('-d', '--delimiter', default=',', metavar='', \
                    help='Field delimiter. Default is a comma (\",\").')
-parser.add_argument('-e', '--encoding', default="utf_16", metavar='', \
+parser.add_argument('-e', '--encoding', default='utf_16', metavar='', \
                    help='File encoding. Default is utf_16.')
+parser.add_argument('-fs', '--filterSentinel', default='', metavar='', \
+                   help='Sentinel value to be removed from the data values. \
+Default is not specified, so nothing is specified.')
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
                     help='Historical trend input file type (format).')
@@ -182,43 +265,44 @@ args = parser.parse_args()
 # Read the csv file into a data frame.  The first row is treated as the header
 dframe = pd.read_csv(args.inputFileName, sep=args.delimiter, 
                     delim_whitespace=False, encoding=args.encoding, header=0, 
-                    skipinitialspace=True, nrows= 5)
+                    skipinitialspace=True)#, nrows= 5)
 # put the headers into a list
 headerList = dframe.columns.values.tolist()
 # make s spot for a list of InstData objects
 instData = []
 
 print('****')
-print(headerList)
 
 # Iterate thru the header list.
 # Create desired column names: value_<instName> and timestamp_<instName>
 # Create a instrument data object with data sliced from the big data frame
 
-for idx in range(0, len(headerList), 2):
+#for idx in range(0, len(headerList), 2):
+for idx in range(0, 4, 2):
     # For each header entry, make instrument and timestamp column names.
     # Even indexes are timestamps, odd indexes are values.
-    # even index ... timestamp
     # get the inst name, leaving off the bit after the last space, which is
-    # normally 'Time'
-    instName = headerList[idx].rpartition(' ')[0] # returns a tuple: first, separator, last
+    # normally 'Time' or 'ValueY'
+    # rpartition returns a tuple: first, separator, last. Use the first 
+    # member as the tag name -- this allows tag names with spaces to be
+    # preserved
+    instName = headerList[idx].rpartition(' ')[0] 
     # replace the spaces with underscores
     instName = instName.replace(' ', '_')
     # generate timestamp and value field (column) names
-    tsName = 'timestamp_' + instName 
+    tsName = 'timestamp_' + instName
     valName = 'value_' + instName
     # create a new dataframe for the instrument
-    iDframe = pd.DataFrame(dframe.iloc[:,[idx,idx+1]], 
-                           columns=[tsName, valName],
-                           dtype={tsName: 'datetime64', valName: 'float'})
-    iDframe.set_index(tsName, inplace=true)
-    instData.append(InstData(instName, valName, tsName, iDframe))
-    print(iDframe.dtypes)
-
+    iDframe = pd.DataFrame(dframe.iloc[:,[idx,idx+1]]) 
+    # make an object with the instrument name, labels and data frame
+    instData.append(TsIdxData(instName, tsName, valName, iDframe))
+    #print(iDframe.dtypes)
     # instrument data object, and append it to the list
 for instr in instData:
-    print(instr.name)
     print(instr)
+
+foo = TsIdxData("sammy")
+print(foo)
 print('****')
 # Prepare to read from the file. Create dictionaries for data types and header
 # values (if needed) depending on input file type.
@@ -362,7 +446,7 @@ for instr in calData:
         outputMsg += InstName + '\n'
         outputMsg += calDate + '\n\n'
         outputMsg += 'NOTE: ' + calNotes + '\n\n'
-        outputMsg +='{:37} {:9d} {:9d}\n' \
+    outputMsg +='{:37} {:9d} {:9d}\n' \
                 .format('Min and Max PLC Nominal Counts: ', minMaxCounts[0], \
                                                     minMaxCounts[1])
         outputMsg += '{:37} {:9.2f} {:9.2f} \n\n' \
