@@ -59,7 +59,7 @@ import pandas as pd
 # create a TimeStamp Indexed data class
 # TODO: Put this def in a module and import it
 class TsIdxData(object):
-    def __init__(self, name, tsName=None, yName=None, df=None, fs=None):
+    def __init__(self, name, tsName=None, yName=None, df=None, qs=None):
         self._name = str(name) # use the string version
 
         # default x-axis (timestamp) label to 'timestamp' if nothing is specified
@@ -77,9 +77,13 @@ class TsIdxData(object):
         # Keep the column (header) names as a property
         self._columns = [self._tsName, self._yName]
 
-        # 
+        # Default the filter sentinel to empty if not specified. 
+        if qs is None:
+            self._qs = ''
+        else:
+            # something specified for filter sentinel (qs)
+            self._qs = str(qs) # use the string version
 
-        # default dataframe to empty if not specified
         if df is None:
             # create an empty data frame with the column names
             self._df = pd.DataFrame(columns=[self._tsName, self._yName])
@@ -113,6 +117,11 @@ class TsIdxData(object):
             # not strictly necessary, but lack of NaN values tends to make
             # follow on data analysis less problematic
             self._df.dropna(subset=[self._yName], inplace=True)
+            # apply the query string if one is specified.
+            # replace val with the value column name
+            if self._qs != '':
+                querystr = self._qs.replace("val", self._yName)
+                self._df = self._df.query(querystr)
             # force the columns to have the data types of datetime and float
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                     errors='coerce')
@@ -135,12 +144,12 @@ class TsIdxData(object):
 
     def __repr__(self):
         colList= list(self._df.columns.values)
-        outputMsg=  '{:8} {}'.format('Name:', self._name + '\n')
-
+        outputMsg=  '{:8} {}'.format('Name: ', self._name + '\n')
         outputMsg+= '{:8} {:18} {:10} {}'.format('Index: ', self._df.index.name, \
 'datatype: ', str(self._df.index.dtype) + '\n')
         outputMsg+= '{:8} {:18} {:10} {}'.format('Y axis: ', str(colList[0]), \
-'datatype: ', str(self._df[colList[0]].dtype) + '\n\n')
+'datatype: ', str(self._df[colList[0]].dtype) + '\n')
+        outputMsg+= '{:14} {}'.format('Query String: ', self._qs + '\n')
         outputMsg+= '{:14} {}'.format('Start Time: ', str(self._startTs) + '\n')
         outputMsg+= '{:14} {}'.format('End Time: ', str(self._endTs) + '\n')
         outputMsg+= '{:14} {}'.format('Value Count: ', str(self._count) + '\n')
@@ -148,7 +157,6 @@ class TsIdxData(object):
         outputMsg+= '{:14} {}'.format('Max Value: ', str(self._max) + '\n')
         outputMsg+= '{:14} {}'.format('Median Value: ', str(self._median) + '\n')
         outputMsg+= '{:14} {}'.format('Mean Value: ', str(self._mean) + '\n')
-        
         outputMsg+= str(self._df) + '\n'
         return(outputMsg)
 
@@ -164,6 +172,10 @@ class TsIdxData(object):
     @property
     def yName(self):
         return self._yName
+
+    @property
+    def queryString(self):
+        return self._qs
 
     @property
     def columns(self):
@@ -222,9 +234,9 @@ used, it can be specified with the -d or --delimiter option.
 Normally, the first row is assumed to be header data (names).
 The -noheader option will treat the first row as data (no header).
 
-If the data contains sentinel value entries, and they are not desired, they can
-be removed from the data by specifying a string with the -fs or
---filterSentinel option.
+The data can be filtered if a query string is specified.  The specified string
+is used as a query string when the data is populated. The query string is
+specified by the -qs or --querystring option.
 
 File encoding can be specified with the -e or -encoding option.  Default
 encoding is utf_16.\n """
@@ -241,9 +253,11 @@ parser.add_argument('-d', '--delimiter', default=',', metavar='', \
                    help='Field delimiter. Default is a comma (\",\").')
 parser.add_argument('-e', '--encoding', default='utf_16', metavar='', \
                    help='File encoding. Default is utf_16.')
-parser.add_argument('-fs', '--filterSentinel', default='', metavar='', \
-                   help='Sentinel value to be removed from the data values. \
-Default is not specified, so nothing is specified.')
+parser.add_argument('-qs', '--queryString', default=None, metavar='', \
+                   help='Query string used to filter the dataset. \
+Default is empty, so nothing is filtered out. Use "val" to represent the \
+value. For example, to filter out all values < 0 or > 100, you want to keep \
+everything else, so the filter string would be "val >= 0 and val <= 100".')
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
                     help='Historical trend input file type (format).')
@@ -261,6 +275,7 @@ args = parser.parse_args()
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
 # args.encoding         string      File encoding. Default is utf_16.
+# args.queryString      string      Optional query of the data
 
 # Read the csv file into a data frame.  The first row is treated as the header
 dframe = pd.read_csv(args.inputFileName, sep=args.delimiter, 
@@ -272,7 +287,6 @@ headerList = dframe.columns.values.tolist()
 instData = []
 
 print('****')
-
 # Iterate thru the header list.
 # Create desired column names: value_<instName> and timestamp_<instName>
 # Create a instrument data object with data sliced from the big data frame
@@ -295,7 +309,8 @@ for idx in range(0, 4, 2):
     # create a new dataframe for the instrument
     iDframe = pd.DataFrame(dframe.iloc[:,[idx,idx+1]]) 
     # make an object with the instrument name, labels and data frame
-    instData.append(TsIdxData(instName, tsName, valName, iDframe))
+    instData.append(TsIdxData(instName, tsName, valName, iDframe,
+                              args.queryString))
     #print(iDframe.dtypes)
     # instrument data object, and append it to the list
 for instr in instData:
