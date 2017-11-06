@@ -81,9 +81,9 @@ class TsIdxData(object):
         if qs is None:
             self._qs = ''
         else:
-            # something specified for filter sentinel (qs)
-            self._qs = str(qs) # use the string version
-
+            # something specified for query string (qs)
+            # make sure it is a string, and convert to lower case
+            self._qs = str(qs).lower()
         if df is None:
             # create an empty data frame with the column names
             self._df = pd.DataFrame(columns=[self._tsName, self._yName])
@@ -96,11 +96,11 @@ class TsIdxData(object):
             self._df.set_index(self._tsName, inplace=True)
 
             # **** statistics -- set to 0
-            # get the start and end timestamps
+            # Set the start and end timestamps to something not likely
             self._startTs = '01/01/1970 00:00:00'
             self._endTs = '01/01/1970 00:00:00'
 
-            # get the count, min, max, median, mean
+            # clear the count, min, max, median, mean
             # median values
             self._count = 0
             self._min = 0
@@ -118,9 +118,10 @@ class TsIdxData(object):
             # follow on data analysis less problematic
             self._df.dropna(subset=[self._yName], inplace=True)
             # apply the query string if one is specified.
-            # replace val with the value column name
+            # replace "val" and "time" with the column names
             if self._qs != '':
                 querystr = self._qs.replace("val", self._yName)
+                querystr = querystr.replace("time", self._tsName)
                 self._df = self._df.query(querystr)
             # force the columns to have the data types of datetime and float
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
@@ -236,7 +237,8 @@ The -noheader option will treat the first row as data (no header).
 
 The data can be filtered if a query string is specified.  The specified string
 is used as a query string when the data is populated. The query string is
-specified by the -qs or --querystring option.
+specified by the -qs or --querystring option.  "val" represents process values
+and "time" represents timestamps.
 
 File encoding can be specified with the -e or -encoding option.  Default
 encoding is utf_16.\n """
@@ -256,8 +258,10 @@ parser.add_argument('-e', '--encoding', default='utf_16', metavar='', \
 parser.add_argument('-qs', '--queryString', default=None, metavar='', \
                    help='Query string used to filter the dataset. \
 Default is empty, so nothing is filtered out. Use "val" to represent the \
-value. For example, to filter out all values < 0 or > 100, you want to keep \
-everything else, so the filter string would be "val >= 0 and val <= 100".')
+process value(s), and use "time" to represent timestamps. For example, to \
+filter out all values < 0 or > 100, and before 01/01/2017 you want to keep \
+everything else, so the filter string would be "val >= 0 and val <= 100 and \
+time >= 01/01/2017".')
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
                     help='Historical trend input file type (format).')
@@ -283,52 +287,44 @@ dframe = pd.read_csv(args.inputFileName, sep=args.delimiter,
                     skipinitialspace=True)#, nrows= 5)
 # put the headers into a list
 headerList = dframe.columns.values.tolist()
-# make s spot for a list of InstData objects
+# make a spot for a list of InstData objects
 instData = []
 
-print('****')
 # Iterate thru the header list.
 # Create desired column names: value_<instName> and timestamp_<instName>
 # Create a instrument data object with data sliced from the big data frame
-
-#for idx in range(0, len(headerList), 2):
-for idx in range(0, 4, 2):
-    # For each header entry, make instrument and timestamp column names.
-    # Even indexes are timestamps, odd indexes are values.
-    # get the inst name, leaving off the bit after the last space, which is
-    # normally 'Time' or 'ValueY'
-    # rpartition returns a tuple: first, separator, last. Use the first 
-    # member as the tag name -- this allows tag names with spaces to be
-    # preserved
-    instName = headerList[idx].rpartition(' ')[0] 
-    # replace the spaces with underscores
-    instName = instName.replace(' ', '_')
-    # generate timestamp and value field (column) names
-    tsName = 'timestamp_' + instName
-    valName = 'value_' + instName
-    # create a new dataframe for the instrument
-    iDframe = pd.DataFrame(dframe.iloc[:,[idx,idx+1]]) 
-    # make an object with the instrument name, labels and data frame
-    instData.append(TsIdxData(instName, tsName, valName, iDframe,
-                              args.queryString))
-    #print(iDframe.dtypes)
-    # instrument data object, and append it to the list
-for instr in instData:
-    print(instr)
-
-foo = TsIdxData("sammy")
-print(foo)
-print('****')
-# Prepare to read from the file. Create dictionaries for data types and header
-# values (if needed) depending on input file type.
-
+# look at the -t or -a argument to know what format the data is in 
 if args.t:
-    header= ''
-elif args.a:
-    pass
+    # historical trend data
+    # In the historical trend case, loop thru every other column to get to the 
+    # time stamp columns. The instrument name can be derrived from this and the 
+    # values can be obtained from a relative (+1) index from the timestamp
+    #for idx in range(0, len(headerList), 2):
+    for idx in range(0, 4, 2):
+        # For each header entry, make instrument and timestamp column names.
+        # Even indexes are timestamps, odd indexes are values.
+        # get the inst name, leaving off the bit after the last space, which is
+        # normally 'Time' or 'ValueY'
+        # rpartition returns a tuple: first, separator, last. Use the first 
+        # member as the tag name -- this allows tag names with spaces to be
+        # preserved
+        instName = headerList[idx].rpartition(' ')[0] 
+        # replace the spaces with underscores
+        instName = instName.replace(' ', '_')
+        # generate timestamp and value field (column) names
+        tsName = 'timestamp_' + instName
+        valName = 'value_' + instName
+        # create a new dataframe for the instrument
+        iDframe = pd.DataFrame(dframe.iloc[:,[idx,idx+1]]) 
+        # make an object with the instrument name, labels and data frame
+        # instrument data object, and append it to the list
+        instData.append(TsIdxData(instName, tsName, valName, iDframe,
+                                  args.queryString))
 else:
-    print("Invalid arguments. The -a or -h option  must be specified.")
-    quit()
+    # TODO: archivce data case
+    pass
+
+
 
 """
 #
