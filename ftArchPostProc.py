@@ -282,20 +282,20 @@ args = parser.parse_args()
 # args.queryString      string      Optional query of the data
 
 # Read the csv file into a data frame.  The first row is treated as the header
-dframe = pd.read_csv(args.inputFileName, sep=args.delimiter, 
+df_source = pd.read_csv(args.inputFileName, sep=args.delimiter, 
                     delim_whitespace=False, encoding=args.encoding, header=0, 
                     skipinitialspace=True)#, nrows= 5)
-# put the headers into a list
-headerList = dframe.columns.values.tolist()
-# make a spot for a list of InstData objects
+# put source the headers into a list
+headerList = df_source.columns.values.tolist()
+# make a spot for a list of instrument InstData objects
 instData = []
 
 # Iterate thru the header list.
 # Create desired column names: value_<instName> and timestamp_<instName>
 # Create a instrument data object with data sliced from the big data frame
 # look at the -t or -a argument to know what format the data is in 
-if args.t:
-    # historical trend data
+if args.t and len(headerList) >= 2:
+    # historical trend data, and there are at least two (time/value pair) cols
     # In the historical trend case, loop thru every other column to get to the 
     # time stamp columns. The instrument name can be derrived from this and the 
     # values can be obtained from a relative (+1) index from the timestamp
@@ -312,18 +312,74 @@ if args.t:
         # replace the spaces with underscores
         instName = instName.replace(' ', '_')
         # generate timestamp and value field (column) names
-        tsName = 'timestamp_' + instName
+        # use the same timestamp name for all, so merge/join operations work
+        #tsName = 'timestamp_' + instName
+        tsName = 'timestamp'
         valName = 'value_' + instName
         # create a new dataframe for the instrument
-        iDframe = pd.DataFrame(dframe.iloc[:,[idx,idx+1]]) 
+        iDframe = pd.DataFrame(df_source.iloc[:,[idx,idx+1]]) 
         # make an object with the instrument name, labels and data frame
         # instrument data object, and append it to the list
         instData.append(TsIdxData(instName, tsName, valName, iDframe,
                                   args.queryString))
-else:
-    # TODO: archivce data case
+
+
+    # 
+elif args.a and len(headerList) >= 2:
+    # archive data, and there are at least two (time/value pair) cols
+    # TODO: archive data case
     pass
 
+# as long as there is a list of instrument objects,
+# loop thru the instruments and get the first and last datetime
+if instData:
+    # init the start and end times
+    startTime= instData[0].startTs
+    endTime= instData[0].endTs
+    # find the earliest and latest start/end times
+    for inst in instData:
+        startTime = min(startTime, inst.startTs)
+        endTime = max(endTime, inst.endTs)
+
+# using the start and end times, build an empty  dataframe with the 
+# date time range as the index
+df_dest = pd.DataFrame(index=pd.date_range(startTime, endTime, freq='s'))
+df_dest.columnns=['timestamp']
+
+# as long as there is a list of instrument objects,
+# loop thru the instruments and merge the data into the destination data frame
+#pd.merge_ordered(df_dest, instData[0]._df, fill_method='ffill', how='outer')
+print(df_dest)
+print(instData[0]._df)
+
+pd.merge(df_dest, instData[0]._df, on='timestamp', how='outer')
+print(df_dest)
+
+
+"""
+# set the data frame with the specified data frame
+            self._df = pd.DataFrame(data=df)
+            self._df.columns=[self._tsName, self._yName]
+            # the ts axis will be the index, so get rid of any NaN values
+            self._df.dropna(subset=[self._tsName], inplace=True)
+            # get rid of Nan from the values (y-axis)
+            # not strictly necessary, but lack of NaN values tends to make
+            # follow on data analysis less problematic
+            self._df.dropna(subset=[self._yName], inplace=True)
+            # apply the query string if one is specified.
+            # replace "val" and "time" with the column names
+            if self._qs != '':
+                querystr = self._qs.replace("val", self._yName)
+                querystr = querystr.replace("time", self._tsName)
+                self._df = self._df.query(querystr)
+            # force the columns to have the data types of datetime and float
+            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
+                                                    errors='coerce')
+            self._df[self._yName] = self._df[self._yName].astype('float',
+                                                    errors='ignore')
+            # set the timestamp as the index
+            self._df.set_index(self._tsName, inplace=True)
+"""
 
 
 """
