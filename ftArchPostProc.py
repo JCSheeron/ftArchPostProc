@@ -93,7 +93,7 @@ class TsIdxData(object):
             self._df[self._yName] = self._df[self._yName].astype('float',
                                                     errors='ignore')
             # set the timestamp as the index
-            self._df.set_index(self._tsName, inplace=True)
+            #self._df.set_index(self._tsName, inplace=True)
 
             # **** statistics -- set to 0
             # Set the start and end timestamps to something not likely
@@ -111,7 +111,7 @@ class TsIdxData(object):
             # set the data frame with the specified data frame
             self._df = pd.DataFrame(data=df)
             self._df.columns=[self._tsName, self._yName]
-            # the ts axis will be the index, so get rid of any NaN values
+            # get rid of any NaN timestamps
             self._df.dropna(subset=[self._tsName], inplace=True)
             # get rid of Nan from the values (y-axis)
             # not strictly necessary, but lack of NaN values tends to make
@@ -129,12 +129,12 @@ class TsIdxData(object):
             self._df[self._yName] = self._df[self._yName].astype('float',
                                                     errors='ignore')
             # set the timestamp as the index
-            self._df.set_index(self._tsName, inplace=True)
+            #self._df.set_index(self._tsName, inplace=True)
 
             # **** statistics
             # get the start and end timestamps
-            self._startTs = self._df.index.min()
-            self._endTs = self._df.index.max()
+            self._startTs = self._df[self._tsName].min()
+            self._endTs = self._df[self._tsName].max()
 
             # get the count, min, max, mean, median values
             self._count = self._df[self._yName].count()
@@ -282,7 +282,7 @@ args = parser.parse_args()
 # args.queryString      string      Optional query of the data
 
 # Read the csv file into a data frame.  The first row is treated as the header
-df_source = pd.read_csv(args.inputFileName, sep=args.delimiter, 
+df_source = pd.read_csv(args.inputFileName, sep=args.delimiter,
                     delim_whitespace=False, encoding=args.encoding, header=0, 
                     skipinitialspace=True)#, nrows= 5)
 # put source the headers into a list
@@ -340,20 +340,30 @@ if instData:
     for inst in instData:
         startTime = min(startTime, inst.startTs)
         endTime = max(endTime, inst.endTs)
+print(startTime)
+print(endTime)
 
 # using the start and end times, build an empty  dataframe with the 
 # date time range as the index
-df_dest = pd.DataFrame(index=pd.date_range(startTime, endTime, freq='s'))
-df_dest.columnns=['timestamp']
+dRange = pd.date_range(startTime, endTime, freq='s')
+df_dest = pd.DataFrame({'timestamp':dRange, 'valDummy':0.0})
+
+# force the columns to have the data types of datetime and float
+df_dest['timestamp'] = pd.to_datetime(df_dest['timestamp'], errors='coerce')
 
 # as long as there is a list of instrument objects,
 # loop thru the instruments and merge the data into the destination data frame
 #pd.merge_ordered(df_dest, instData[0]._df, fill_method='ffill', how='outer')
 print(df_dest)
 print(instData[0]._df)
+#df_new = df_dest.join(instData[0]._df, on='timestamp')
+df_new = pd.merge_ordered(df_dest, instData[0]._df, on='timestamp', fill_method='ffill', how='left')
 
-pd.merge(df_dest, instData[0]._df, on='timestamp', how='outer')
-print(df_dest)
+
+#df_new = pd.merge(df_dest, instData[0]._df, left_index=True, right_index=True,
+#                  how='left')
+#df_new = pd.merge(df_dest, instData[0]._df, on='timestamp', how='outer')
+print(df_new)
 
 
 """
