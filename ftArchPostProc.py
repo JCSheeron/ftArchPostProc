@@ -47,7 +47,8 @@
 # -noheader (optional) Do not treat the first row as header info.
 
 # imports
-from copy import deepcopy
+
+from datetime import datetime
 
 # import arg parser
 import argparse
@@ -132,8 +133,9 @@ class TsIdxData(object):
                                                     errors='coerce')
             self._df[self._yName] = self._df[self._yName].astype('float',
                                                     errors='ignore')
-            # Make sure the data is sorted by timestamp. This is needed for the
-            # merge to work as expected.
+            # Make sure the data is sorted by timestamp. Even if the data seems
+            # sorted, this is sometimes needed or the merge will create a 
+            # a bunch of unexpected (erronous) NaN values.
             self._df.sort_values(self._tsName, ascending=True, inplace=True)
             # set the timestamp as the index
             self._df.set_index(self._tsName, inplace=True)
@@ -220,6 +222,11 @@ class TsIdxData(object):
         return self._mean
 
 
+print('*** Begin Processing ***')
+# get start processing time
+procStart = datetime.now()
+print('Process start time: ' + str(procStart) + '\n')
+
 # **** argument parsing
 # define the arguments
 # create an epilog string to further describe the input file
@@ -239,10 +246,10 @@ ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags
 and there are normally multiple valueIDs with multiple timestamps.
 
 The default field delimiter is a comma (\",\"). If a different delimiter is
-used, it can be specified with the -d or --delimiter option.
+used for the source or destination file(s), it can be specified with the
+-sd or --sourcedelimiter, or -dd or -destdelimiter options.
 
-Normally, the first row is assumed to be header data (names).
-The -noheader option will treat the first row as data (no header).
+The first row is assumed to be header data (names).
 
 The data can be filtered if a query string is specified.  The specified string
 is used as a query string when the data is populated. The query string is
@@ -254,7 +261,8 @@ specified using the -st or --starttime and -et or --endtime options.
 The data will be merged over this time period.  If they are not specified, the
 start and end times are derived from the data.
 
-File encoding can be specified with the -e or -encoding option.  Default
+File encoding for the source or destination files  can be specified with the
+-se or --sourceencoding, or -de or --destencoding options.  Default
 encoding is utf_16.\n """
 
 descrStr="Post Processing of historical trend or archive data files."
@@ -263,12 +271,14 @@ parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpForm
                                  epilog=eplStr)
 parser.add_argument('inputFileName', help='Input data file (csv)')
 parser.add_argument('outputFileName', help= 'Output data file (csv)')
-parser.add_argument('-noheader', action='store_true', default=False, \
-                   help='Input file does not contain headers.')
-parser.add_argument('-d', '--delimiter', default=',', metavar='', \
-                   help='Field delimiter. Default is a comma (\",\").')
-parser.add_argument('-e', '--encoding', default='utf_16', metavar='', \
-                   help='File encoding. Default is utf_16.')
+parser.add_argument('-sd', '--sourceDelimiter', default=',', metavar='', \
+                   help='Source file field delimiter. Default is a comma (\",\").')
+parser.add_argument('-se', '--sourceEncoding', default='utf_16', metavar='', \
+                   help='Source file encoding. Default is utf_16.')
+parser.add_argument('-dd', '--destDelimiter', default=',', metavar='', \
+                   help='Destination file field delimiter. Default is a comma (\",\").')
+parser.add_argument('-de', '--destEncoding', default='utf_16', metavar='', \
+                   help='Source file encoding. Default is utf_16.')
 parser.add_argument('-qs', '--queryString', default=None, metavar='', \
                    help='Query string used to filter the dataset. \
 Default is empty, so nothing is filtered out. Use "val" to represent the \
@@ -276,9 +286,9 @@ process value(s), and use "time" to represent timestamps. For example, to \
 filter out all values < 0 or > 100, and before 01/01/2017 you want to keep \
 everything else, so the filter string would be "val >= 0 and val <= 100 and \
 time >= 01/01/2017".')
-parser.add_argument('-st', '--starttime', default=None, metavar='', \
+parser.add_argument('-st', '--startTime', default=None, metavar='', \
                     help='Specify a start time. Use the data if not specified.')
-parser.add_argument('-et', '--endtime', default=None, metavar='', \
+parser.add_argument('-et', '--endTime', default=None, metavar='', \
                     help='Specify an end time. Use the data if not specified.')
 # add -t and -a as a required, but mutually exclusive group
 typegroup = parser.add_mutually_exclusive_group(required=True)
@@ -293,19 +303,20 @@ args = parser.parse_args()
 # Argument          Values      Description
 # args.inputFileName    string  file to get data from
 # args.outputFileName   string  file to write processed data to
-# args.noheader         True/False  Input data has no header data when set
-# args.delimiter        string      Field delimiter. Default is (",")
+# args.sourceDelimiter  string  Input file field delimiter. Default is (",")
+# args.sourceEncoding   string  Input file encoding. Default is utf_16.
+# args.destDelimiter    string  Dest file field delimiter. Default is (",")
+# args.destEncoding     string  Dest file encoding. Default is utf_16.
+# args.queryString      string  Optional query of the data
+# args.startTime        string  Optional start date time
+# args.endTime          string  Options end date time
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
-# args.encoding         string      File encoding. Default is utf_16.
-# args.queryString      string      Optional query of the data
-# args.starttime        string      Optional start date time
-# args.endtime          string      Options end date time
 
 # Read the csv file into a data frame.  The first row is treated as the header
-df_source = pd.read_csv(args.inputFileName, sep=args.delimiter,
-                    delim_whitespace=False, encoding=args.encoding, header=0, 
-                    skipinitialspace=True)#, nrows= 5)
+df_source = pd.read_csv(args.inputFileName, sep=args.sourceDelimiter,
+                    delim_whitespace=False, encoding=args.sourceEncoding,
+                    header=0, skipinitialspace=True)
 # put source the headers into a list
 headerList = df_source.columns.values.tolist()
 # make a spot for a list of instrument InstData objects
@@ -320,8 +331,7 @@ if args.t and len(headerList) >= 2:
     # In the historical trend case, loop thru every other column to get to the 
     # time stamp columns. The instrument name can be derrived from this and the 
     # values can be obtained from a relative (+1) index from the timestamp
-    #for idx in range(0, len(headerList), 2):
-    for idx in range(0, 4, 2):
+    for idx in range(0, len(headerList), 2):
         # For each header entry, make instrument and timestamp column names.
         # Even indexes are timestamps, odd indexes are values.
         # get the inst name, leaving off the bit after the last space, which is
@@ -365,9 +375,9 @@ if instData:
 # should be the earliest of the last data time and the specified end time.
 # Convert the specified start time, or use the data time if nothing is
 # specified, or if the specified value cannot be converted to a datetime
-if args.starttime is not None:
+if args.startTime is not None:
     try:
-        startArg = pd.to_datetime(args.starttime)
+        startArg = pd.to_datetime(args.startTime)
     except:
         print('Invalid start time specified. Using the data to get a start time.')
         startArg = startTime
@@ -375,9 +385,9 @@ else:
     startArg = startTime
 # Convert the specified end time, or use the data time if nothing is
 # specified, or if the specified value cannot be converted to a datetime
-if args.endtime is not None:
+if args.endTime is not None:
     try:
-        endArg = pd.to_datetime(args.endtime)
+        endArg = pd.to_datetime(args.endTime)
     except:
         print('Invalid end time specified. Using the data to get an end time.')
         endArg = endTime
@@ -408,302 +418,22 @@ df_dateRange.set_index(ts_name, inplace=True)
 
 # as long as there is a list of instrument objects,
 # loop thru the instruments and merge the data into the destination data frame
-print(df_dateRange)
-print(instData[0]._df)
-df_new = pd.merge_asof(df_dateRange, instData[0]._df,
+if instData:
+    df_dest = df_dateRange
+    for inst in instData:
+        df_dest = pd.merge_asof(df_dest, inst._df,
                        left_index = True, right_index = True)
+    # replace any NaN values in the resulting data frame with 0s so data users
+    # are not tripped up with NaN
+    df_dest.fillna(0.0, inplace = True)
+
+# write the destination data frame to the output file
+df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
+        encoding=args.destEncoding)
 
 
-print(df_new)
-
-
-"""
-# set the data frame with the specified data frame
-            self._df = pd.DataFrame(data=df)
-            self._df.columns=[self._tsName, self._yName]
-            # the ts axis will be the index, so get rid of any NaN values
-            self._df.dropna(subset=[self._tsName], inplace=True)
-            # get rid of Nan from the values (y-axis)
-            # not strictly necessary, but lack of NaN values tends to make
-            # follow on data analysis less problematic
-            self._df.dropna(subset=[self._yName], inplace=True)
-            # apply the query string if one is specified.
-            # replace "val" and "time" with the column names
-            if self._qs != '':
-                querystr = self._qs.replace("val", self._yName)
-                querystr = querystr.replace("time", self._tsName)
-                self._df = self._df.query(querystr)
-            # force the columns to have the data types of datetime and float
-            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
-                                                    errors='coerce')
-            self._df[self._yName] = self._df[self._yName].astype('float',
-                                                    errors='ignore')
-            # set the timestamp as the index
-            self._df.set_index(self._tsName, inplace=True)
-"""
-
-
-"""
-#
-# **** Read from the specified input file
-# This is done so the input file can be a properly formed dictionary or a list
-# of dictionaries, and the resulting calData should always be a list, perhaps
-# with only one element.
-calData=[]
-with open(args.inputFileName, 'r') as infile:
-    inData= json.load(infile)
-    infile.close()
-    # deal with the list of dictionaryies, or the single dictionary case
-    if (type(inData) is list):
-        # presumably a list of dictionaries
-        # Use extend to add list elements. Append would put a list in a list
-        calData.extend(deepcopy(inData))
-    elif (type(inData) is dict):
-        # A single dictionary entry. Append the dict object to the list.
-        # Extend would make a list of dictionary keys.
-        calData.append(deepcopy(inData))
-    else:
-        print('Invalid input data. Exiting.')
-        quit()
-
-# **** Loop thru the list from the file.  It should be a list of dictionaries,
-# with one list entry per instrument.
-for instr in calData:
-
-    # Unpack the dictionary entry into into NumPy
-    # friendly datatypes and local variables
-    InstName= instr['01_instName']
-    EuUnitsLabel= instr['03_EuUnits']
-    calDate= instr['02_calDate']
-    calNotes= instr['08_notes']
-
-    # **** Get Min and Max values for EU and counts.
-    # Counts would be integers, except making them floats allows
-    # usage of the numpy.interp and other functions
-    minMaxEu = np.array(instr['05_minMaxEu'])
-    minMaxCounts = np.array(instr['04_minMaxCounts'])
-
-    # **** Get empirical (actual) values determined during calibration.
-    actEus = np.array(instr['07_actEus'], dtype=np.float32)
-    actCounts = np.array(instr['06_actCounts'], dtype=np.int32)
-
-
-    # **** Simulate count values for given EU values if the -s or --simulate
-    # option is specified.
-    # Create count values based on actual EU values.
-    if args.simulate:
-        # Generate some fake empirical data. Normally this will be
-        # entered up above. For the entered EU values generate some counts
-        # values based on the nominal slope and intercept, but include
-        # some noise as an artificial error.
-
-        # Use interp to interpolate count values given EU values.
-        # For this, the EU is the x-axis, and the counts are the y-axis
-        actCounts = np.interp(actEus, minMaxEu, minMaxCounts)
-        # and then randomize them a bit
-        for idx, actCount in enumerate(actCounts):
-             # make sure min < max
-            if actCount < 0:
-                # make sure min < max
-                actCounts[idx] = np.random.randint(actCount * 1.2, \
-                                                   actCount * 0.8)
-            elif actCount > 0:
-                actCounts[idx] = np.random.randint(actCount * 0.8, \
-                                                   actCount * 1.2)
-            else:
-                # at zero
-                actCounts[idx]= 0
-        # convert the counts back to integers. Round first just to be safe
-        actCounts=np.round(actCounts, decimals=0).astype(np.int32)
-    # **** End Simulate section
-
-    # **** Generate nominal EU values
-    # Generate some EU values at a hand full of count values between min/max
-    # Interpolate given the min/max counts and EU values
-    nomCounts = np.linspace(minMaxCounts[0], minMaxCounts[1], 5, dtype=np.int32)
-    nomEus = np.interp(nomCounts, minMaxCounts, minMaxEu)
-
-    # **** Curve fit the empirical data
-    # Curve fit the empirical data to a 1 degree polynomial (a line)
-    # polyfit returns the coefficients (highest power first)
-    # given the data set and a degree
-    coeffs = polyfit(actCounts, actEus, 1)
-    # get a polynomial object so we can print it, and so we can get the roots
-    # and compensate for a count offset below
-    empPoly = np.poly1d(coeffs)
-    # make a curve fit line which spans the nominal count values 
-    empLine = polyval(coeffs, nomCounts)
-    # get curve fit values at count min/max
-    empMinMax = polyval(coeffs, minMaxCounts)
-
-    # **** Compensate for a non-zero count at zero EU, which is essentially the
-    # x-intercept of the EU axis.  Get the offset, and apply it to the measured
-    # count values, and curve fit to get a new formula.
-    # Create a 1 dimensional polynomial object, and get the roots. Since this
-    # is a single degree polynomial (a line) the root will be a scalar (a
-    # single value). The root is the value of x (counts) where Y (EU) is zero.
-    countOffset = (empPoly).roots
-    # Shift the measured count values by this offset.
-    # NOTE: This works because we are using a 1 degree poly fit, and the root
-    # is a scalar (single value). Something else may be needed for more
-    # complicated curves.
-    offsetCounts = (np.round(actCounts - countOffset,
-                    decimals=0)).astype(np.int32)
-    # make a curve fit for the new line. This is a bit heavy-handed, since this
-    # could be done by adjusting count values, and not doing an additional
-    # curve fit, but I am doing this as it may be of benefit if we ever need
-    # more complicated polynomials as well (degrees > 1), but
-    # the roots would not be scalar, so the offset Al Gore rhythm would be
-    # different.
-    offsetCoeffs = polyfit(offsetCounts, actEus, 1)
-    # get a polynomial object so we can print it
-    offsetPoly = np.poly1d(offsetCoeffs)
-    # make a new line using the new offset curve fit. Span the nominal counts.
-    offsetLine = polyval(offsetCoeffs, nomCounts)
-    # get offset values at count min/max
-    offsetMinMax = polyval(offsetCoeffs, minMaxCounts)
-
-    # **** Create string to write to the terminal or a file depending on the -v
-    # and -o arguments. 
-    # outputFilePrefix is not empty. If it is empty, then don't write to a
-    # file.
-    if args.outputFilePrefix != '' or args.v:
-        fname = args.outputFilePrefix + '_' + InstName + '.txt'
-        outputMsg = '*' * 78 + '\n'
-        outputMsg += 'Nominal and Actual Calibration Data\n'
-        outputMsg += InstName + '\n'
-        outputMsg += calDate + '\n\n'
-        outputMsg += 'NOTE: ' + calNotes + '\n\n'
-    outputMsg +='{:37} {:9d} {:9d}\n' \
-                .format('Min and Max PLC Nominal Counts: ', minMaxCounts[0], \
-                                                    minMaxCounts[1])
-        outputMsg += '{:37} {:9.2f} {:9.2f} \n\n' \
-                .format('Min and Max Nominal EU (' + EuUnitsLabel + '): ', \
-                        minMaxEu[0], minMaxEu[1])
-        outputMsg +='{:16}  {:30}\n'.format('Measured Counts', \
-                                    'Measured EU (' + EuUnitsLabel + ')')
-        outputMsg +='{:16}  {:30}\n'.format('_' * 15, '_' * 30)
-        # loop thru the counts and print a list of counts vs eu values
-        for idx in range(actCounts.size):
-            outputMsg +='{: <16d}  {: <30.2f}\n'.format(actCounts[idx], \
-                                                          actEus[idx])
-        outputMsg += '\nThe least squares fit 1 degree polynomial (line) is:'
-        outputMsg += str(empPoly) + '\n\n'
-
-        outputMsg +='Calibrated engineering units for the min and max \
-PLC counts are as follows:\n'
-        outputMsg +='EU at min and max PLC Counts:  {:11.4f}   {:11.4f}\n\n' \
-                .format(empMinMax[0], empMinMax[1])
-        outputMsg += 'Compensate for a non-zero count value at zero EU.\n'
-        outputMsg += 'Shift the curve fit up or down by the count value of \n'
-        outputMsg += 'the zero EU value (the x-intercept of EU axis).\n'
-        outputMsg += 'The adjusted count values vs EU values are:\n\n'
-        outputMsg +='{:16}  {:30}\n'.format('Adjusted Counts', \
-                                    'Measured EU (' + EuUnitsLabel + ')')
-        outputMsg +='{:16}  {:30}\n'.format('_' * 15, '_' * 30)
-        # loop thru the counts and print a list of counts vs eu values
-        for idx in range(actCounts.size):
-            outputMsg +='{: <16d}  {: <30.2f}\n'.format(offsetCounts[idx], \
-                                                        actEus[idx])
-        outputMsg += '\nThe least squares fit 1 degree polynomial (line) \
-for the adjusted counts is:'
-        outputMsg += str(offsetPoly) + '\n\n'
-
-        outputMsg += 'Calibrated engineering units for the adjusted \n'
-        outputMsg += 'min and max PLC counts are as follows:\n'
-        outputMsg += 'EU at min and max PLC Counts:  {:11.4f}   {:11.4f}\n' \
-                .format(offsetMinMax[0], offsetMinMax[1])
-        outputMsg +='*' * 78 + '\n'
-
-        # output to a file if the -o option is used
-        if args.outputFilePrefix != '':
-            outFile = open(fname, 'a+')
-            outFile.write(outputMsg)
-            outFile.close()
-
-        # output to the terminal if the -v option is used
-        if args.v:
-            print(outputMsg)
-
-    # **** End writing to file or the terminal
-    #
-    # **** Plot the data
-
-    # get a figure and a single sub-plot to allow better control
-    # than using no sub-plots
-    fig, ax = plt.subplots()
-
-    # set the titles
-    fig.suptitle('Nominal and Actual Calibration Curves', \
-                fontsize=14, fontweight='bold')
-    plt.title(InstName + '    ' + calDate, fontsize=12, fontweight='bold')
-    ax.set_xlabel('counts')
-    ax.set_ylabel('Engineering Units (EU)\n' + EuUnitsLabel)
-
-    # make additional room for the labels
-    plt.subplots_adjust(left=0.18, bottom=0.18)
-
-    # add the data to the plot
-    # plot the measurments as points
-    ax.plot(actCounts, actEus, color='blue', \
-            linewidth=1.0, linestyle='', \
-            markersize=2.8, marker='x', label='meas.')
-    # plot the nominal line
-    ax.plot(nomCounts, nomEus, color='green', \
-            linewidth=1.0, linestyle='-', marker='', label='nominal')
-    # plot the curve fit line
-    ax.plot(nomCounts, empLine, color='red', \
-            linewidth=1.0, linestyle='-', marker='', label='crv. fit')
-    # plot the offset curve fit line
-    ax.plot(nomCounts, offsetLine, color='orange', \
-            linewidth=1.0, linestyle='-', marker='', label='offset')
-
-    # set the legend
-    ax.legend(loc='upper left', frameon=True)
-
-    # set axis limits. Extend a bit past the min/max values
-    countRange = (minMaxCounts[1] - minMaxCounts[0])
-    euRange = (minMaxEu[1] - minMaxEu[0])
-    plt.xlim(minMaxCounts[0] - (countRange * 0.05), \
-             minMaxCounts[1] + (countRange * 0.05))
-
-    plt.ylim(minMaxEu[0] - (euRange * 0.05), \
-             minMaxEu[1] + (euRange * 0.05))
-
-    # set x and y ticks
-
-    # create a two line x-axis labeling with the counts on the top and the 
-    # percentages on the bottom
-    # first get the values (counts)
-    xAxVals=np.linspace(minMaxCounts[0], minMaxCounts[1], 5, endpoint = True)
-    # force the x axis value to be integers
-    xAxValss=xAxVals.astype(np.int32)
-    # then use list comprehension to get corresponding percentages
-    xAxPct=[(((x - minMaxCounts[0]) / countRange) * 100) for x in xAxVals]
-    # now append them into a string
-    xAxLabels=[]
-    for idx in range(len(xAxVals)):
-        xAxLabels.append(str(xAxVals[idx]) + '\n' + str(xAxPct[idx]) + '%')
-
-    plt.setp(ax, \
-            xticks=(np.linspace(minMaxCounts[0], \
-                    minMaxCounts[1], 5, endpoint = True)),
-            xticklabels=xAxLabels,
-            yticks=(np.linspace(minMaxEu[0], minMaxEu[1], 9, endpoint = True)))
-
-
-    # show the grid
-    ax.grid(b=True, which='both', linestyle='-.')
-
-    # Save the plot if the outFilePrefix is not empty. If it is empty, don't
-    # save the plot.
-    if args.outputFilePrefix != '':
-        fname= args.outputFilePrefix + '_' + InstName + '.pdf'
-        plt.savefig(fname, orientation='portrait', papertype='letter',
-                   format='pdf', transparent=False, frameon=False,
-                   bbox_inches='tight', pad_inches=0.25)
-
-    # draw the plot if the -v option is set
-    if args.v:
-        plt.show()
-"""
+# get end  processing time
+procEnd = datetime.now()
+print('Process end time: ' + str(procEnd))
+print('Duration: ' + str(procEnd - procStart))
+print('*** End Processing ***' + '\n')
