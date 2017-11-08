@@ -93,7 +93,7 @@ class TsIdxData(object):
             self._df[self._yName] = self._df[self._yName].astype('float',
                                                     errors='ignore')
             # set the timestamp as the index
-            #self._df.set_index(self._tsName, inplace=True)
+            self._df.set_index(self._tsName, inplace=True)
 
             # **** statistics -- set to 0
             # Set the start and end timestamps to something not likely
@@ -117,24 +117,33 @@ class TsIdxData(object):
             # not strictly necessary, but lack of NaN values tends to make
             # follow on data analysis less problematic
             self._df.dropna(subset=[self._yName], inplace=True)
-            # apply the query string if one is specified.
-            # replace "val" and "time" with the column names
+            # Apply the query string if one is specified.
+            # Replace "val" and "time" with the column names.
             if self._qs != '':
                 querystr = self._qs.replace("val", self._yName)
                 querystr = querystr.replace("time", self._tsName)
-                self._df = self._df.query(querystr)
+                # try to run the query string, but ignore it on error
+                try:
+                    self._df = self._df.query(querystr)
+                except:
+                    print('Invalid query stirng. Ignoring the specified query.')
             # force the columns to have the data types of datetime and float
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                     errors='coerce')
             self._df[self._yName] = self._df[self._yName].astype('float',
                                                     errors='ignore')
+            # Make sure the data is sorted by timestamp. This is needed for the
+            # merge to work as expected.
+            self._df.sort_values(self._tsName, ascending=True, inplace=True)
             # set the timestamp as the index
-            #self._df.set_index(self._tsName, inplace=True)
+            self._df.set_index(self._tsName, inplace=True)
 
             # **** statistics
             # get the start and end timestamps
-            self._startTs = self._df[self._tsName].min()
-            self._endTs = self._df[self._tsName].max()
+            #self._startTs = self._df[self._tsName].min()
+            self._startTs = self._df.index.min()
+            #self._endTs = self._df[self._tsName].max()
+            self._endTs = self._df.index.max()
 
             # get the count, min, max, mean, median values
             self._count = self._df[self._yName].count()
@@ -240,6 +249,11 @@ is used as a query string when the data is populated. The query string is
 specified by the -qs or --querystring option.  "val" represents process values
 and "time" represents timestamps.
 
+As an alternative to a query string, a start and/or end timestamp can be
+specified using the -st or --starttime and -et or --endtime options.
+The data will be merged over this time period.  If they are not specified, the
+start and end times are derived from the data.
+
 File encoding can be specified with the -e or -encoding option.  Default
 encoding is utf_16.\n """
 
@@ -262,6 +276,11 @@ process value(s), and use "time" to represent timestamps. For example, to \
 filter out all values < 0 or > 100, and before 01/01/2017 you want to keep \
 everything else, so the filter string would be "val >= 0 and val <= 100 and \
 time >= 01/01/2017".')
+parser.add_argument('-st', '--starttime', default=None, metavar='', \
+                    help='Specify a start time. Use the data if not specified.')
+parser.add_argument('-et', '--endtime', default=None, metavar='', \
+                    help='Specify an end time. Use the data if not specified.')
+# add -t and -a as a required, but mutually exclusive group
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
                     help='Historical trend input file type (format).')
@@ -280,6 +299,8 @@ args = parser.parse_args()
 # args.a                True/False  Archive data input file type when set
 # args.encoding         string      File encoding. Default is utf_16.
 # args.queryString      string      Optional query of the data
+# args.starttime        string      Optional start date time
+# args.endtime          string      Options end date time
 
 # Read the csv file into a data frame.  The first row is treated as the header
 df_source = pd.read_csv(args.inputFileName, sep=args.delimiter,
@@ -312,9 +333,9 @@ if args.t and len(headerList) >= 2:
         # replace the spaces with underscores
         instName = instName.replace(' ', '_')
         # generate timestamp and value field (column) names
-        # use the same timestamp name for all, so merge/join operations work
-        #tsName = 'timestamp_' + instName
-        tsName = 'timestamp'
+        # include the instr name in the timestamp column label so it can be
+        # identified standalone
+        tsName = 'timestamp_' + instName
         valName = 'value_' + instName
         # create a new dataframe for the instrument
         iDframe = pd.DataFrame(df_source.iloc[:,[idx,idx+1]]) 
@@ -323,8 +344,6 @@ if args.t and len(headerList) >= 2:
         instData.append(TsIdxData(instName, tsName, valName, iDframe,
                                   args.queryString))
 
-
-    # 
 elif args.a and len(headerList) >= 2:
     # archive data, and there are at least two (time/value pair) cols
     # TODO: archive data case
@@ -340,29 +359,61 @@ if instData:
     for inst in instData:
         startTime = min(startTime, inst.startTs)
         endTime = max(endTime, inst.endTs)
-print(startTime)
-print(endTime)
 
+# if the start/end arguments are valid, then the start time should be the
+# latest of the first data time and the specified start time, and the end time
+# should be the earliest of the last data time and the specified end time.
+# Convert the specified start time, or use the data time if nothing is
+# specified, or if the specified value cannot be converted to a datetime
+if args.starttime is not None:
+    try:
+        startArg = pd.to_datetime(args.starttime)
+    except:
+        print('Invalid start time specified. Using the data to get a start time.')
+        startArg = startTime
+else:
+    startArg = startTime
+# Convert the specified end time, or use the data time if nothing is
+# specified, or if the specified value cannot be converted to a datetime
+if args.endtime is not None:
+    try:
+        endArg = pd.to_datetime(args.endtime)
+    except:
+        print('Invalid end time specified. Using the data to get an end time.')
+        endArg = endTime
+else:
+    endArg = endTime
+
+# at this point the startArg and endArg have either command line argument
+# specified values or the data based values.  Now determine the resulting
+# combination of argument and data values. Make start the later of the two, and
+# end the earlier of the two. This prevents a bunch of NaN values if the data
+# is inside the argument values
+startTime = max(startTime, startArg)
+endTime = min(endTime, endArg)
+
+# create a daterange data frame to act as the master datetime range. The data
+# will get left merged to this data frame.
+#
+# create the timestamp column name
+ts_name = 'timestamp'
 # using the start and end times, build an empty  dataframe with the 
 # date time range as the index
-dRange = pd.date_range(startTime, endTime, freq='s')
-df_dest = pd.DataFrame({'timestamp':dRange, 'valDummy':0.0})
-
-# force the columns to have the data types of datetime and float
-df_dest['timestamp'] = pd.to_datetime(df_dest['timestamp'], errors='coerce')
+df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime, endTime, freq='s')})
+# Make sure the date range is sorted. This is needed for the
+# merge to work as expected.
+df_dateRange.sort_values(ts_name, ascending=True, inplace=True)
+# set the timestamp as the index
+df_dateRange.set_index(ts_name, inplace=True)
 
 # as long as there is a list of instrument objects,
 # loop thru the instruments and merge the data into the destination data frame
-#pd.merge_ordered(df_dest, instData[0]._df, fill_method='ffill', how='outer')
-print(df_dest)
+print(df_dateRange)
 print(instData[0]._df)
-#df_new = df_dest.join(instData[0]._df, on='timestamp')
-df_new = pd.merge_ordered(df_dest, instData[0]._df, on='timestamp', fill_method='ffill', how='left')
+df_new = pd.merge_asof(df_dateRange, instData[0]._df,
+                       left_index = True, right_index = True)
 
 
-#df_new = pd.merge(df_dest, instData[0]._df, left_index=True, right_index=True,
-#                  how='left')
-#df_new = pd.merge(df_dest, instData[0]._df, on='timestamp', how='outer')
 print(df_new)
 
 
