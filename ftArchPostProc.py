@@ -125,9 +125,9 @@ class TsIdxData(object):
                 querystr = querystr.replace("time", self._tsName)
                 # try to run the query string, but ignore it on error
                 try:
-                    self._df = self._df.query(querystr)
+                    self._df.query(querystr, inplace = True)
                 except:
-                    print('Invalid query stirng. Ignoring the specified query.')
+                    print('Invalid query string. Ignoring the specified query.')
             # force the columns to have the data types of datetime and float
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                     errors='coerce')
@@ -290,6 +290,12 @@ parser.add_argument('-st', '--startTime', default=None, metavar='', \
                     help='Specify a start time. Use the data if not specified.')
 parser.add_argument('-et', '--endTime', default=None, metavar='', \
                     help='Specify an end time. Use the data if not specified.')
+parser.add_argument('-rs', '--resample', default=None, metavar='', \
+                    help='Resample. If period is less often than data \
+available, then a min, max, and average value is generated.  Default is no \
+resampling.  Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds. \
+You can put an integer in front of the option to further specify a period. \
+For example, "5S" would be a 5 second sample period.')
 # add -t and -a as a required, but mutually exclusive group
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
@@ -310,10 +316,11 @@ args = parser.parse_args()
 # args.queryString      string  Optional query of the data
 # args.startTime        string  Optional start date time
 # args.endTime          string  Options end date time
+# args.resample         string  Resample period.
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
 
-# Read the csv file into a data frame.  The first row is treated as the header
+# **** Read the csv file into a data frame.  The first row is treated as the header
 df_source = pd.read_csv(args.inputFileName, sep=args.sourceDelimiter,
                     delim_whitespace=False, encoding=args.sourceEncoding,
                     header=0, skipinitialspace=True)
@@ -322,7 +329,7 @@ headerList = df_source.columns.values.tolist()
 # make a spot for a list of instrument InstData objects
 instData = []
 
-# Iterate thru the header list.
+# ****Iterate thru the header list.
 # Create desired column names: value_<instName> and timestamp_<instName>
 # Create a instrument data object with data sliced from the big data frame
 # look at the -t or -a argument to know what format the data is in 
@@ -340,8 +347,9 @@ if args.t and len(headerList) >= 2:
         # member as the tag name -- this allows tag names with spaces to be
         # preserved
         instName = headerList[idx].rpartition(' ')[0] 
-        # replace the spaces with underscores
+        # replace the spaces and hyphens with underscores
         instName = instName.replace(' ', '_')
+        instName = instName.replace('-', '_')
         # generate timestamp and value field (column) names
         # include the instr name in the timestamp column label so it can be
         # identified standalone
@@ -351,14 +359,14 @@ if args.t and len(headerList) >= 2:
         iDframe = pd.DataFrame(df_source.iloc[:,[idx,idx+1]]) 
         # make an object with the instrument name, labels and data frame
         # instrument data object, and append it to the list
-        instData.append(TsIdxData(instName, tsName, valName, iDframe,
-                                  args.queryString))
+        instData.append(TsIdxData(instName, tsName, valName, iDframe, args.queryString))
 
 elif args.a and len(headerList) >= 2:
     # archive data, and there are at least two (time/value pair) cols
     # TODO: archive data case
     pass
 
+# **** Determine start and end times
 # as long as there is a list of instrument objects,
 # loop thru the instruments and get the first and last datetime
 if instData:
@@ -402,9 +410,8 @@ else:
 startTime = max(startTime, startArg)
 endTime = min(endTime, endArg)
 
-# create a daterange data frame to act as the master datetime range. The data
-# will get left merged to this data frame.
-#
+# **** Create a daterange data frame to act as the master datetime range.
+# The data will get left merged using this data frame for time
 # create the timestamp column name
 ts_name = 'timestamp'
 # using the start and end times, build an empty  dataframe with the 
@@ -416,7 +423,8 @@ df_dateRange.sort_values(ts_name, ascending=True, inplace=True)
 # set the timestamp as the index
 df_dateRange.set_index(ts_name, inplace=True)
 
-# as long as there is a list of instrument objects,
+# **** Populate the destination data frame
+# As long as there is a list of instrument objects,
 # loop thru the instruments and merge the data into the destination data frame
 if instData:
     df_dest = df_dateRange
@@ -427,7 +435,8 @@ if instData:
     # are not tripped up with NaN
     df_dest.fillna(0.0, inplace = True)
 
-# write the destination data frame to the output file
+
+# **** Write the destination data frame to the output file
 df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
         encoding=args.destEncoding)
 
