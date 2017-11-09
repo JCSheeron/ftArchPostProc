@@ -44,7 +44,6 @@
 #
 #-d or --delimiter (optional, default of "'"). Delimiter. Single character or regex.
 #
-# -noheader (optional) Do not treat the first row as header info.
 
 # imports
 
@@ -290,12 +289,6 @@ parser.add_argument('-st', '--startTime', default=None, metavar='', \
                     help='Specify a start time. Use the data if not specified.')
 parser.add_argument('-et', '--endTime', default=None, metavar='', \
                     help='Specify an end time. Use the data if not specified.')
-parser.add_argument('-rs', '--resample', default=None, metavar='', \
-                    help='Resample. If period is less often than data \
-available, then a min, max, and average value is generated.  Default is no \
-resampling.  Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds. \
-You can put an integer in front of the option to further specify a period. \
-For example, "5S" would be a 5 second sample period.')
 # add -t and -a as a required, but mutually exclusive group
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
@@ -316,7 +309,6 @@ args = parser.parse_args()
 # args.queryString      string  Optional query of the data
 # args.startTime        string  Optional start date time
 # args.endTime          string  Options end date time
-# args.resample         string  Resample period.
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
 
