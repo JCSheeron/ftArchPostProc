@@ -48,7 +48,8 @@
 
 # imports
 
-from datetime import datetime
+from datetime import datetime, time
+from dateutil import parser as duparser
 
 # import arg parser
 import argparse
@@ -60,7 +61,8 @@ import pandas as pd
 # create a TimeStamp Indexed data class
 # TODO: Put this def in a module and import it
 class TsIdxData(object):
-    def __init__(self, name, tsName=None, yName=None, df=None, qs=None):
+    def __init__(self, name, tsName=None, yName=None, df=None,
+            valueQuery=None, startQuery=None, endQuery=None):
         self._name = str(name) # use the string version
 
         # default x-axis (timestamp) label to 'timestamp' if nothing is specified
@@ -79,12 +81,73 @@ class TsIdxData(object):
         self._columns = [self._tsName, self._yName]
 
         # Default the filter sentinel to empty if not specified. 
-        if qs is None:
-            self._qs = ''
+        if valueQuery is None:
+            self._vq = ''
         else:
-            # something specified for query string (qs)
+            # something specified for the value  query string (vq)
             # make sure it is a string, and convert to lower case
-            self._qs = str(qs).lower()
+            self._vq = str(valueQuery).lower()
+
+        # Convert the start and end times to datetimes if they are specified.
+        # Use the dateutil.parser function to get input flexability, and then
+        # convert to a pandas datetime for max compatibility
+        # If time info is not included in the start time, it defaults to
+        # midnight, so comparisons will work as expected and capture the entire
+        # day. For the end time, however, if time info is not included, force
+        # it to be 11:59:59.999 so the entire end date is captured.
+        if startQuery is None:
+            self._startQuery = None
+        else:
+            # see if it is already a datetime. If it is, no need to do
+            # anything. If it isn't then convert it. If there is a conversion
+            # error, set to none and print a message
+            if not isinstance(startQuery, pd.datetime):
+                # need to convert
+                try:
+                    self._startQuery = duparser.parse(startQuery, fuzzy=True)
+                    # convert to a pandas datetime for max compatibility
+                    self._startQuery = pd.to_datetime(self._startQuery,
+                                            errors='coerce',
+                                            box=True,
+                                            infer_datetime_format=True,
+                                            origin='unix')
+                except:
+                    # not convertable ... invalid ... ignore
+                    print('Invalid start query. Ignoring.')
+                    self._startQuery = None
+            else:
+                # no need to convert
+                self._startQuery = startQuery
+
+        # repeat for end query
+        if endQuery is None:
+            self._endQuery = None
+        else:
+            # see if it is already a datetime. If it is, no need to do
+            # anything. If it isn't then convert it. If there is a conversion
+            # error, set to none and print a message
+            if not isinstance(endQuery, pd.datetime):
+                # need to convert
+                try:
+                    self._endQuery = duparser.parse(endQuery, fuzzy=True)
+                    # assume the end time of midnight means end time info was not
+                    # specified. Force it to the end of the day
+                    if self._endQuery.time() == time(0,0,0,0):
+                        self._endQuery = self._endQuery.replace(hour=23, minute=59, 
+                                                  second=59, microsecond=999999)
+                    # convert to a pandas datetime for max compatibility
+                    self._endQuery = pd.to_datetime(self._endQuery, errors='coerce',
+                                            box=True,
+                                            infer_datetime_format=True,
+                                            origin='unix')
+                except:
+                    # not convertable ... invalid ... ignore
+                    print('Invalid end query. Ignoring.')
+                    self._endQuery = None
+            else:
+                # no need to convert
+                self._endQuery = endQuery
+
         if df is None:
             # create an empty data frame with the column names
             self._df = pd.DataFrame(columns=[self._tsName, self._yName])
@@ -98,8 +161,8 @@ class TsIdxData(object):
 
             # **** statistics -- set to 0
             # Set the start and end timestamps to something not likely
-            self._startTs = '01/01/1970 00:00:00'
-            self._endTs = '01/01/1970 00:00:00'
+            self._startTs = pd.NaT
+            self._endTs = pd.NaT
 
             # clear the count, min, max, median, mean
             # median values
@@ -112,39 +175,48 @@ class TsIdxData(object):
             # set the data frame with the specified data frame
             self._df = pd.DataFrame(data=df)
             self._df.columns=[self._tsName, self._yName]
-            # get rid of any NaN timestamps
-            self._df.dropna(subset=[self._tsName], inplace=True)
+            # force the values to floats
+            self._df[self._yName] = self._df[self._yName].astype('float',
+                                                    errors='ignore')
             # get rid of Nan from the values (y-axis)
             # not strictly necessary, but lack of NaN values tends to make
             # follow on data analysis less problematic
             self._df.dropna(subset=[self._yName], inplace=True)
+            # force the timestamp to be a datetime
+            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
+                                                errors='coerce',
+                                                box = True, 
+                                                format = "%-m/%-d/%Y %H:%M:$S",
+                                                infer_datetime_format = True,
+                                                origin = 'unix')
+            # get rid of any NaN and NaT timestamps. These can be from the
+            # original data or from invalid conversions to datetime
+            self._df.dropna(subset=[self._tsName], inplace=True)
+
             # Apply the query string if one is specified.
-            # Replace "val" and "time" with the column names.
-            if self._qs != '':
-                querystr = self._qs.replace("val", self._yName)
-                querystr = querystr.replace("time", self._tsName)
+            # Replace "val" with the column name.
+            if self._vq != '':
+                queryStr = self._vq.replace("val", self._yName)
                 # try to run the query string, but ignore it on error
                 try:
-                    self._df.query(querystr, inplace = True)
+                    self._df.query(queryStr, inplace = True)
                 except:
                     print('Invalid query string. Ignoring the specified query.')
-            # force the columns to have the data types of datetime and float
-            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
-                                                    errors='coerce')
-            self._df[self._yName] = self._df[self._yName].astype('float',
-                                                    errors='ignore')
+
             # Make sure the data is sorted by timestamp. Even if the data seems
-            # sorted, this is sometimes needed or the merge will create a 
-            # a bunch of unexpected (erronous) NaN values.
+            # sorted, this is sometimes needed or the merge will create a
+            # bunch of unexpected (erronous) NaN values.
             self._df.sort_values(self._tsName, ascending=True, inplace=True)
             # set the timestamp as the index
             self._df.set_index(self._tsName, inplace=True)
 
+            # now the timestamp is the index, so filter based on the specified
+            # start and end times
+            self._df= self._df.loc[self._startQuery : self._endQuery]
+
             # **** statistics
             # get the start and end timestamps
-            #self._startTs = self._df[self._tsName].min()
             self._startTs = self._df.index.min()
-            #self._endTs = self._df[self._tsName].max()
             self._endTs = self._df.index.max()
 
             # get the count, min, max, mean, median values
@@ -225,7 +297,7 @@ class TsIdxData(object):
 print('*** Begin Processing ***')
 # get start processing time
 procStart = datetime.now()
-print('Process start time: ' + str(procStart) + '\n')
+print('Process start time: ' + procStart.strftime('%m/%d/%Y %H:%M:%S') + '\n')
 
 # **** argument parsing
 # define the arguments
@@ -253,8 +325,7 @@ The first row is assumed to be header data (names).
 
 The data can be filtered if a query string is specified.  The specified string
 is used as a query string when the data is populated. The query string is
-specified by the -qs or --querystring option.  "val" represents process values
-and "time" represents timestamps.
+specified by the -vq or --valueQuery option.  "val" represents process values.
 
 As an alternative to a query string, a start and/or end timestamp can be
 specified using the -st or --starttime and -et or --endtime options.
@@ -279,13 +350,12 @@ parser.add_argument('-dd', '--destDelimiter', default=',', metavar='', \
                    help='Destination file field delimiter. Default is a comma (\",\").')
 parser.add_argument('-de', '--destEncoding', default='utf_16', metavar='', \
                    help='Source file encoding. Default is utf_16.')
-parser.add_argument('-qs', '--queryString', default=None, metavar='', \
+parser.add_argument('-vq', '--valueQuery', default=None, metavar='', \
                    help='Query string used to filter the dataset. \
 Default is empty, so nothing is filtered out. Use "val" to represent the \
-process value(s), and use "time" to represent timestamps. For example, to \
-filter out all values < 0 or > 100, and before 01/01/2017 you want to keep \
-everything else, so the filter string would be "val >= 0 and val <= 100 and \
-time >= 01/01/2017".')
+process value(s). For example, to filter out all values < 0 or > 100,\
+you want to keep everything else, so the filter string would be: \
+"val >= 0 and val <= 100".')
 parser.add_argument('-st', '--startTime', default=None, metavar='', \
                     help='Specify a start time. Use the data if not specified.')
 parser.add_argument('-et', '--endTime', default=None, metavar='', \
@@ -313,12 +383,52 @@ args = parser.parse_args()
 # args.sourceEncoding   string  Input file encoding. Default is utf_16.
 # args.destDelimiter    string  Dest file field delimiter. Default is (",")
 # args.destEncoding     string  Dest file encoding. Default is utf_16.
-# args.queryString      string  Optional query of the data
+# args.valueQuery       string  Optional query of the data
 # args.startTime        string  Optional start date time
 # args.endTime          string  Options end date time
 # args.resample         string  Resample period.
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
+
+# **** Convert the start and end times to datetimes if they are specified.
+# Use the dateutil.parser function to get input flexability, and then
+# convert to a pandas datetime for max compatibility
+# If time info is not included in the start time, it defaults to
+# midnight, so comparisons will work as expected and capture the entire
+# day. For the end time, however, if time info is not included, force
+# it to be 11:59:59.999 so the entire end date is captured.
+if args.startTime is not None:
+    # Convert the argument to a datetime. If it can't be converted, ignore it.
+    # need to convert
+    try:
+        startArg = duparser.parse(args.startTime, fuzzy=True)
+        # convert to a pandas datetime for max compatibility
+        startArg = pd.to_datetime(startArg, errors='coerce', box=True,
+                                  infer_datetime_format=True, origin='unix')
+    except:
+        # not convertable ... invalid ... ignore
+        print('Invalid start time. Ignoring.')
+        startArg = None
+else:
+    # arg is none, so update the internal version
+    startArg = None
+
+# repeat for end time
+if args.endTime is not None:
+    # Convert the argument to a datetime. If it can't be converted, ignore it.
+    # need to convert
+    try:
+        endArg = duparser.parse(args.endTime, fuzzy=True)
+        # convert to a pandas datetime for max compatibility
+        endArg = pd.to_datetime(endArg, errors='coerce', box=True,
+                                  infer_datetime_format=True, origin='unix')
+    except:
+        # not convertable ... invalid ... ignore
+        print('Invalid end time. Ignoring.')
+        endArg = None
+else:
+    # arg is none, so update the internal version
+    endArg = None
 
 # **** Read the csv file into a data frame.  The first row is treated as the header
 df_source = pd.read_csv(args.inputFileName, sep=args.sourceDelimiter,
@@ -358,91 +468,99 @@ if args.t and len(headerList) >= 2:
         # create a new dataframe for the instrument
         iDframe = pd.DataFrame(df_source.iloc[:,[idx,idx+1]]) 
         # make an object with the instrument name, labels and data frame
-        # instrument data object, and append it to the list
-        instData.append(TsIdxData(instName, tsName, valName, iDframe, args.queryString))
+        # instrument data object, and append it to the list.
+        # Querying of value and filtering of timestamps will happen during
+        # construction of the object
+        instData.append(TsIdxData(instName, tsName, valName, iDframe,
+            args.valueQuery, startArg, endArg))
 
 elif args.a and len(headerList) >= 2:
     # archive data, and there are at least two (time/value pair) cols
     # TODO: archive data case
     pass
 
-# **** Determine start and end times
-# as long as there is a list of instrument objects,
+# **** Determine the first start and end times for the instruments
+# As long as there is a list of instrument objects,
 # loop thru the instruments and get the first and last datetime
+# init the start and end times
+startTime= pd.NaT
+endTime= pd.NaT
 if instData:
-    # init the start and end times
-    startTime= instData[0].startTs
-    endTime= instData[0].endTs
     # find the earliest and latest start/end times
     for inst in instData:
-        startTime = min(startTime, inst.startTs)
-        endTime = max(endTime, inst.endTs)
+        if not inst._df.empty and not pd.isna(inst.startTs) and pd.isna(startTime):
+            # first valid time
+            startTime = inst.startTs
+        elif not inst._df.empty and not pd.isna(inst.startTs) and not pd.isna(startTime):
+            # get min 
+            startTime = min(startTime, inst.startTs)
 
-# if the start/end arguments are valid, then the start time should be the
-# latest of the first data time and the specified start time, and the end time
-# should be the earliest of the last data time and the specified end time.
-# Convert the specified start time, or use the data time if nothing is
-# specified, or if the specified value cannot be converted to a datetime
-if args.startTime is not None:
-    try:
-        startArg = pd.to_datetime(args.startTime)
-    except:
-        print('Invalid start time specified. Using the data to get a start time.')
+        if not inst._df.empty and not pd.isna(inst.endTs) and pd.isna(endTime):
+            # first valid time
+            endTime = inst.endTs
+        elif not inst._df.empty and not pd.isna(inst.endTs) and not pd.isna(endTime):
+            # get the max
+            endTime = max(endTime, inst.endTs)
+# **** From here on, use the start and end not a time (NaT) check as a check to
+# see if there is any data
+if not pd.isna(startTime) and not pd.isna(endTime):
+    # **** Make the start and end arguments the latest of the first data time
+    # and the specified start time, and the end time should be the earliest
+    # of the last data time and the specified end time.  The arguments were 
+    # processed above, so they are valid or set to None if they were invalid
+    # or not specified.
+    # Init the arguments to the instrument times from above if nothing was
+    # specified.
+
+    if startArg is None:
         startArg = startTime
-else:
-    startArg = startTime
-# Convert the specified end time, or use the data time if nothing is
-# specified, or if the specified value cannot be converted to a datetime
-if args.endTime is not None:
-    try:
-        endArg = pd.to_datetime(args.endTime)
-    except:
-        print('Invalid end time specified. Using the data to get an end time.')
+
+    if endArg is None:
         endArg = endTime
+
+    # At this point the startArg and endArg have either command line argument
+    # specified values or the data based values.  Now determine the resulting
+    # combination of argument and data values. Make start the later of the two, and
+    # end the earlier of the two. This prevents a bunch of NaN values if the data
+    # is inside the argument values
+    startTime = max(startTime, startArg)
+    endTime = min(endTime, endArg)
+
+    # **** Create a daterange data frame to act as the master datetime range.
+    # The data will get left merged using this data frame for time
+    # create the timestamp column name
+    ts_name = 'timestamp'
+    # using the start and end times, build an empty  dataframe with the 
+    # date time range as the index
+    df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime, endTime, freq='S')})
+    # Make sure the date range is sorted. This is needed for the
+    # merge to work as expected.
+    df_dateRange.sort_values(ts_name, ascending=True, inplace=True)
+    # set the timestamp as the index
+    df_dateRange.set_index(ts_name, inplace=True)
+
+    # **** Populate the destination data frame
+    # As long as there is a list of instrument objects,
+    # loop thru the instruments and merge the data into the destination data frame
+    if instData:
+        df_dest = df_dateRange
+        for inst in instData:
+            df_dest = pd.merge_asof(df_dest, inst._df,
+                           left_index = True, right_index = True)
+        # replace any NaN values in the resulting data frame with 0s so data users
+        # are not tripped up with NaN
+        df_dest.fillna(0.0, inplace = True)
+        
+        print(df_dest)
+
+    # **** Write the destination data frame to the output file
+    #df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
+    #        encoding=args.destEncoding)
 else:
-    endArg = endTime
+    print('No data found. Nothing written')
 
-# at this point the startArg and endArg have either command line argument
-# specified values or the data based values.  Now determine the resulting
-# combination of argument and data values. Make start the later of the two, and
-# end the earlier of the two. This prevents a bunch of NaN values if the data
-# is inside the argument values
-startTime = max(startTime, startArg)
-endTime = min(endTime, endArg)
-
-# **** Create a daterange data frame to act as the master datetime range.
-# The data will get left merged using this data frame for time
-# create the timestamp column name
-ts_name = 'timestamp'
-# using the start and end times, build an empty  dataframe with the 
-# date time range as the index
-df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime, endTime, freq='s')})
-# Make sure the date range is sorted. This is needed for the
-# merge to work as expected.
-df_dateRange.sort_values(ts_name, ascending=True, inplace=True)
-# set the timestamp as the index
-df_dateRange.set_index(ts_name, inplace=True)
-
-# **** Populate the destination data frame
-# As long as there is a list of instrument objects,
-# loop thru the instruments and merge the data into the destination data frame
-if instData:
-    df_dest = df_dateRange
-    for inst in instData:
-        df_dest = pd.merge_asof(df_dest, inst._df,
-                       left_index = True, right_index = True)
-    # replace any NaN values in the resulting data frame with 0s so data users
-    # are not tripped up with NaN
-    df_dest.fillna(0.0, inplace = True)
-
-
-# **** Write the destination data frame to the output file
-df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
-        encoding=args.destEncoding)
-
-
-# get end  processing time
+#get end  processing time
 procEnd = datetime.now()
-print('Process end time: ' + str(procEnd))
+print('Process end time: ' + procEnd.strftime('%m/%d/%Y %H:%M:%S') + '\n')
 print('Duration: ' + str(procEnd - procStart))
 print('*** End Processing ***' + '\n')
