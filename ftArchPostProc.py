@@ -360,10 +360,11 @@ parser.add_argument('-st', '--startTime', default=None, metavar='', \
                     help='Specify a start time. Use the data if not specified.')
 parser.add_argument('-et', '--endTime', default=None, metavar='', \
                     help='Specify an end time. Use the data if not specified.')
-parser.add_argument('-rs', '--resample', default=None, metavar='', \
-                    help='Resample. If period is less often than data \
-available, then a min, max, and average value is generated.  Default is no \
-resampling.  Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds. \
+parser.add_argument('-rs', '--resample', default='S', metavar='', \
+                    help='Resample. If period longer than 1 Sec is specified, \
+then one value is used to represent many values.  A min, max, and average \
+value is generated.  Default is 1S, and no min/max/avg is calculated.\
+Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds. \
 You can put an integer in front of the option to further specify a period. \
 For example, "5S" would be a 5 second sample period.')
 # add -t and -a as a required, but mutually exclusive group
@@ -386,7 +387,7 @@ args = parser.parse_args()
 # args.valueQuery       string  Optional query of the data
 # args.startTime        string  Optional start date time
 # args.endTime          string  Options end date time
-# args.resample         string  Resample period.
+# args.resample         string  Resample period. Default is 'S' or 1 sample/sec.
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
 
@@ -534,7 +535,15 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     ts_name = 'timestamp'
     # using the start and end times, build an empty  dataframe with the 
     # date time range as the index
-    df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime, endTime, freq='S')})
+    try:
+        df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime,
+                                                           endTime,
+                                                           freq=str(args.resample))})
+    except:
+        print('Error: Problem with generated date/time range. Check resample \
+argument. Using a period of 1 sec')
+        df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime, endTime, freq='S')})
+    print(df_dateRange)
     # Make sure the date range is sorted. This is needed for the
     # merge to work as expected.
     df_dateRange.sort_values(ts_name, ascending=True, inplace=True)
