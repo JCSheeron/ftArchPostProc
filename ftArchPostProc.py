@@ -460,6 +460,8 @@ if args.t and len(headerList) >= 2:
         # replace the spaces and hyphens with underscores
         instName = instName.replace(' ', '_')
         instName = instName.replace('-', '_')
+        # print a message showing what we are processing
+        print('Processing ' + instName)
         # generate timestamp and value field (column) names
         # include the instr name in the timestamp column label so it can be
         # identified standalone
@@ -552,7 +554,7 @@ if not pd.isna(startTime) and not pd.isna(endTime):
         df_dest.fillna(0.0, inplace = True)
         
         print(df_dest)
-
+    print('Writing the output file')
     # **** Write the destination data frame to the output file
     #df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
     #        encoding=args.destEncoding)
