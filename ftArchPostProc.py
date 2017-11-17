@@ -62,7 +62,7 @@ import pandas as pd
 # TODO: Put this def in a module and import it
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
-            valueQuery=None, startQuery=None, endQuery=None):
+            valueQuery=None, startQuery=None, endQuery=None, resample=None):
         self._name = str(name) # use the string version
 
         # default x-axis (timestamp) label to 'timestamp' if nothing is specified
@@ -87,6 +87,13 @@ class TsIdxData(object):
             # something specified for the value  query string (vq)
             # make sure it is a string, and convert to lower case
             self._vq = str(valueQuery).lower()
+
+        # Get the string version of the resample param
+        if resample is None:
+            self._resample = ''
+        else:
+            # get the string version
+            self._resample = str(resample)
 
         # Convert the start and end times to datetimes if they are specified.
         # Use the dateutil.parser function to get input flexability, and then
@@ -149,13 +156,34 @@ class TsIdxData(object):
                 self._endQuery = endQuery
 
         if df is None:
-            # create an empty data frame with the column names
-            self._df = pd.DataFrame(columns=[self._tsName, self._yName])
-            # force the columns to have the data types of datetime and float
+            # No source specified ...
+            # create different columns if resampling
+            if self._resample == '':
+                # not resampling ...
+                # create an empty data frame with the column names
+                self._df = pd.DataFrame(columns=[self._tsName, self._yName])
+                # force the columns to have the data types of datetime and float
+                self._df[self._yName] = self._df[self._yName].astype('float',
+                                                        errors='ignore')
+            else:
+                # resample case
+                # create an empty data frame with the column names
+                # include statistical columns
+                self._df = pd.DataFrame(columns=[self._tsName, self._yName,
+                                                'min_' + self._name,
+                                                'mean_'+ self._name,
+                                                'max_' + self._name,
+                                                'std_' + self._name])
+                # force the columns to have the data types of float
+                types = {self._yNmae: float, 'min_' + self._name: float,
+                                             'mean_'+ self._name: float,
+                                             'max_' + self._name: float,
+                                             'std_' + self._name: float}
+                self._df = self._df.astype(types, errors = 'ignore')
+
+            # force the timestamp to a datetime
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                     errors='coerce')
-            self._df[self._yName] = self._df[self._yName].astype('float',
-                                                    errors='ignore')
             # set the timestamp as the index
             self._df.set_index(self._tsName, inplace=True)
 
@@ -172,10 +200,12 @@ class TsIdxData(object):
             self._median = 0
             self._mean = 0
         else:
+            # Source data is specified ...
+            # Capture the source data
             # set the data frame with the specified data frame
             self._df = pd.DataFrame(data=df)
             self._df.columns=[self._tsName, self._yName]
-            # force the values to floats
+            # force the value column to a float
             self._df[self._yName] = self._df[self._yName].astype('float',
                                                     errors='ignore')
             # get rid of Nan from the values (y-axis)
@@ -225,6 +255,29 @@ class TsIdxData(object):
             self._max = self._df[self._yName].max()
             self._median = self._df[self._yName].median()
             self._mean = self._df[self._yName].mean()
+
+            # At this point we are done if we are not resampling.  If we are
+            # resampling, then create a resampled dataframe
+            # TODO: Decide what to do ... keep both or get rid of source and
+            # overwrite it with the resampled
+            if self._resample != '':
+                # resample case
+                # create an empty data frame with the column names
+                # include statistical columns
+                self._df = pd.DataFrame(columns=[self._tsName, self._yName,
+                                                'min_' + self._name,
+                                                'mean_'+ self._name,
+                                                'max_' + self._name,
+                                                'std_' + self._name])
+                # force the columns to have the data types of float
+                types = {self._yName: float, 'min_' + self._name: float,
+                                             'mean_'+ self._name: float,
+                                             'max_' + self._name: float,
+                                             'std_' + self._name: float}
+                self._df = self._df.astype(types, errors = 'ignore')
+                print(self._df)
+
+
 
     def __repr__(self):
         colList= list(self._df.columns.values)
@@ -475,7 +528,7 @@ if args.t and len(headerList) >= 2:
         # Querying of value and filtering of timestamps will happen during
         # construction of the object
         instData.append(TsIdxData(instName, tsName, valName, iDframe,
-            args.valueQuery, startArg, endArg))
+            args.valueQuery, startArg, endArg, resample = '2S'))
 
 elif args.a and len(headerList) >= 2:
     # archive data, and there are at least two (time/value pair) cols
