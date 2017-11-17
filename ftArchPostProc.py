@@ -264,21 +264,44 @@ class TsIdxData(object):
                 # resample case
                 # create an empty data frame with the column names
                 # include statistical columns
-                self._df = pd.DataFrame(columns=[self._tsName, self._yName,
-                                                'min_' + self._name,
-                                                'mean_'+ self._name,
-                                                'max_' + self._name,
-                                                'std_' + self._name])
-                # force the columns to have the data types of float
-                types = {self._yName: float, 'min_' + self._name: float,
-                                             'mean_'+ self._name: float,
-                                             'max_' + self._name: float,
-                                             'std_' + self._name: float}
-                self._df = self._df.astype(types, errors = 'ignore')
-                print(self._df)
+                # create column names for statistical columns
+                minColName = 'min_' + self._name
+                maxColName = 'max_' + self._name
+                meanColName = 'mean_'+ self._name
+                stdColName = 'std_' + self._name   
+                
+                self._dfResample = pd.DataFrame(columns=[self._tsName,
+                                                self._yName,
+                                                minColName,
+                                                maxColName,
+                                                meanColName,
+                                                stdColName])
 
+                # force the columns to timestamp and float
+                self._dfResample[self._tsName] = \
+                    pd.to_datetime(self._dfResample[self._tsName], errors='coerce')
+                types = {self._yName: float,
+                        minColName: float,
+                        maxColName: float,
+                        meanColName: float,
+                        stdColName: float}
+                self._dfResample = self._dfResample.astype(types, errors = 'ignore')
 
-
+                # set the timestamp as the index
+                self._dfResample.set_index(self._tsName, inplace=True)
+                # resample the data from the complete dataframe. Get the value
+                # column by number using iloc
+                self._dfResample[self._yName] = \
+                        self._df.iloc[:,0].resample(self._resample).last()
+                self._dfResample[minColName] = \
+                        self._df.iloc[:,0].resample(self._resample).min()
+                self._dfResample[maxColName] = \
+                        self._df.iloc[:,0].resample(self._resample).max()
+                self._dfResample[meanColName] = \
+                        self._df.iloc[:,0].resample(self._resample).mean()
+                self._dfResample[stdColName] = \
+                        self._df.iloc[:,0].resample(self._resample).std()
+                
     def __repr__(self):
         colList= list(self._df.columns.values)
         outputMsg=  '{:8} {}'.format('Name: ', self._name + '\n')
@@ -286,7 +309,7 @@ class TsIdxData(object):
 'datatype: ', str(self._df.index.dtype) + '\n')
         outputMsg+= '{:8} {:18} {:10} {}'.format('Y axis: ', str(colList[0]), \
 'datatype: ', str(self._df[colList[0]].dtype) + '\n')
-        outputMsg+= '{:14} {}'.format('Query String: ', self._qs + '\n')
+        outputMsg+= '{:14} {}'.format('Value Query: ', self._vq + '\n')
         outputMsg+= '{:14} {}'.format('Start Time: ', str(self._startTs) + '\n')
         outputMsg+= '{:14} {}'.format('End Time: ', str(self._endTs) + '\n')
         outputMsg+= '{:14} {}'.format('Value Count: ', str(self._count) + '\n')
@@ -413,7 +436,7 @@ parser.add_argument('-st', '--startTime', default=None, metavar='', \
                     help='Specify a start time. Use the data if not specified.')
 parser.add_argument('-et', '--endTime', default=None, metavar='', \
                     help='Specify an end time. Use the data if not specified.')
-parser.add_argument('-rs', '--resample', default='S', metavar='', \
+parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample. If period longer than 1 Sec is specified, \
 then one value is used to represent many values.  A min, max, and average \
 value is generated.  Default is 1S, and no min/max/avg is calculated.\
@@ -484,6 +507,14 @@ else:
     # arg is none, so update the internal version
     endArg = None
 
+# get the resample argument
+if args.resample is not None:
+    resample = str(args.resample) # use the string version
+else:
+    # arg is none, so update the internal version
+    resample = None
+
+
 # **** Read the csv file into a data frame.  The first row is treated as the header
 df_source = pd.read_csv(args.inputFileName, sep=args.sourceDelimiter,
                     delim_whitespace=False, encoding=args.sourceEncoding,
@@ -528,7 +559,7 @@ if args.t and len(headerList) >= 2:
         # Querying of value and filtering of timestamps will happen during
         # construction of the object
         instData.append(TsIdxData(instName, tsName, valName, iDframe,
-            args.valueQuery, startArg, endArg, resample = '2S'))
+            args.valueQuery, startArg, endArg, resample = resample))
 
 elif args.a and len(headerList) >= 2:
     # archive data, and there are at least two (time/value pair) cols
@@ -591,12 +622,13 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     try:
         df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime,
                                                            endTime,
-                                                           freq=str(args.resample))})
+                                                           freq=resample)})
     except:
         print('Error: Problem with generated date/time range. Check resample \
 argument. Using a period of 1 sec')
-        df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime, endTime, freq='S')})
-    print(df_dateRange)
+        df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime,
+                                                          endTime,
+                                                          freq='S')})
     # Make sure the date range is sorted. This is needed for the
     # merge to work as expected.
     df_dateRange.sort_values(ts_name, ascending=True, inplace=True)
@@ -609,13 +641,20 @@ argument. Using a period of 1 sec')
     if instData:
         df_dest = df_dateRange
         for inst in instData:
-            df_dest = pd.merge_asof(df_dest, inst._df,
-                           left_index = True, right_index = True)
+            if resample == '':
+                # not resampling. Use all the data
+                df_dest = pd.merge_asof(df_dest, inst._df,
+                                       left_index = True, right_index = True)
+            else:
+                # resampling.  Use the resampled data
+                df_dest = pd.merge_asof(df_dest, inst._dfResample,
+                                       left_index = True, right_index = True)
+
         # replace any NaN values in the resulting data frame with 0s so data users
         # are not tripped up with NaN
         df_dest.fillna(0.0, inplace = True)
         
-        print(df_dest)
+        #print(df_dest)
     print('Writing the output file')
     # **** Write the destination data frame to the output file
     #df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
