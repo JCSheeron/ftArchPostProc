@@ -713,17 +713,16 @@ argument.')
         # are not tripped up with NaN
         df_dest.fillna(0.0, inplace = True)
 
-    print(df_dest)
-    print('Writing the output file')
+    print('Writing the output file\n')
     #print(df_dest)
     # **** Write the destination data frame to the output file
-    #df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
-    #        encoding=args.destEncoding)
+    df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
+            encoding=args.destEncoding)
 else:
-    print('No data found. Nothing written')
+    print('No data found. Nothing written\n')
 
 #get end  processing time
 procEnd = datetime.now()
-print('Process end time: ' + procEnd.strftime('%m/%d/%Y %H:%M:%S') + '\n')
+print('Process end time: ' + procEnd.strftime('%m/%d/%Y %H:%M:%S'))
 print('Duration: ' + str(procEnd - procStart))
 print('*** End Processing ***' + '\n')
