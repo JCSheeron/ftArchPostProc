@@ -92,6 +92,7 @@
 # values are used to calculate the statistic.
 #
 # TODO: Move Timestamp Indexed data class (TsIdxData) to a module
+# TODO: Improved Error handling. Currently this is minimal
 
 # imports
 
@@ -334,9 +335,8 @@ class TsIdxData(object):
 
             # At this point we are done if we are not resampling.  If we are
             # resampling, then create a resampled dataframe, and use the whole
-            # dataframe to resample.
-            # TODO: Decide what to do ... keep both or get rid of source and
-            # overwrite it with the resampled
+            # dataframe to resample. Once done, overwrite the dataframe with
+            # the resampled one.
             if self._resample != '':
                 # resample case
                 # create an empty data frame with the column names

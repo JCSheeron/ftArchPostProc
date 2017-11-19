@@ -91,7 +91,7 @@
  values are used to calculate the statistic.
 
  TODO: Move Timestamp Indexed data class (TsIdxData) to a module
-
+ TODO: Better error handling.  Currently, this is minimum
  Imports:
 
 from datetime import datetime, time
