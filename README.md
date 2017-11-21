@@ -2,7 +2,8 @@
 
  Final Test Archive Data Post Processing
  This program accepts an input csv file, post processes it, and creates a csv
- output file.
+ output file.  An export control message is included at the head of the output
+ file, unless the -noExportMsg argument is used.
 
  In the case of a historical trend generated file (the -t command line
  argument), the data columns are as follows:
@@ -90,15 +91,20 @@
  next sample point are thrown away. For the other options, the intermediate
  values are used to calculate the statistic.
 
+ -noExportMsg (optional, default=False). When this argument is used, it turns
+ off the inclusion of an export control message.  The defaults to false, so a
+ message is included unless this argument is specified.
+
  TODO: Move Timestamp Indexed data class (TsIdxData) to a module
- TODO: Better error handling.  Currently, this is minimum
+ TODO: Better error handling.  Currently, error handling is minimal
+
  Imports:
 
-from datetime import datetime, time
-from dateutil import parser as duparser
+ from datetime import datetime, time
+ from dateutil import parser as duparser
 
-import argparse
+ import argparse
 
-import numpy as np
-import pandas as pd
+ import numpy as np
+ import pandas as pd
 

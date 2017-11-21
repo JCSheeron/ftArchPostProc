@@ -3,7 +3,8 @@
 
 # Final Test Archive Data Post Processing
 # This program accepts an input csv file, post processes it, and creates a csv
-# output file.
+# output file.  An export control message is included at the head of the output
+# file, unless the -noExportMsg argument is used.
 #
 # In the case of a historical trend generated file (the -t command line
 # argument), the data columns are as follows:
@@ -82,7 +83,7 @@
 # that other options are supported by the environment, but unexpected sample
 # times may result.
 #
-# -stats' (optional, default='m') Choose which statistics to calculate when
+# -stats (optional, default='m') Choose which statistics to calculate when
 # resampling. Ignored if not resampling (-rs must be specified for this option
 # to do anything).  Choices are: (V)alue, m(I)n, ma(X), (a)verage/(m)ean,
 # and (s)tandard deviation. Choices are not case sensitive. Default is 
@@ -91,13 +92,20 @@
 # next sample point are thrown away. For the other options, the intermediate
 # values are used to calculate the statistic.
 #
+# -noExportMsg (optional, default=False). When this argument is used, it turns
+# off the inclusion of an export control message.  The defaults to false, so a
+# message is included unless this argument is specified.
+# 
 # TODO: Move Timestamp Indexed data class (TsIdxData) to a module
-# TODO: Improved Error handling. Currently this is minimal
+# TODO: Improved Error handling. Currently, error handling is minimal
 
 # imports
-
+# date and time stuff
 from datetime import datetime, time
 from dateutil import parser as duparser
+
+# csv file stuff
+import csv
 
 # import arg parser
 import argparse
@@ -477,7 +485,8 @@ print('Process start time: ' + procStart.strftime('%m/%d/%Y %H:%M:%S') + '\n')
 # create an epilog string to further describe the input file
 eplStr="""Final Test Archive Data Post Processing
  This program accepts an input csv file, post processes it, and creates a csv
- output file.
+ output file.  An export control message is included at the head of the output
+ file, unless the -noExportMsg argument is used.
 
  In the case of a historical trend generated file (the -t command line
  argument), the data columns are as follows:
@@ -562,8 +571,11 @@ eplStr="""Final Test Archive Data Post Processing
  average/mean.  In the case of the Value option, the first value available
  which is on or after the timestamp is shown. The values between this and the
  next sample point are thrown away. For the other options, the intermediate
- values are used to calculate the statistic."""
+ values are used to calculate the statistic.
 
+ -noExportMsg (optional, default=False). When this argument is used, it turns
+ off the inclusion of an export control message.  The defaults to false, so a
+ message is included unless this argument is specified. """
 
 descrStr="Post Processing of historical trend or archive data files."
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, \
@@ -612,6 +624,10 @@ parser.add_argument('-stats', default='m', metavar='', \
  next sample point are thrown away. For the other options, the intermediate \
  values are used to calculate the statistic.')
 
+parser.add_argument('-noExportMsg', action='store_true', default=False, \
+                    help='Do not include the export control message at the \
+head of the output file when specified.')
+
 # add -t and -a as a required, but mutually exclusive group
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
@@ -634,6 +650,7 @@ args = parser.parse_args()
 # args.endTime          string  Options end date time
 # args.resample         string  Resample period. Default is 'S' or 1 sample/sec.
 # args.stats            string  Stats to calc. Value, min, max, ave, std dev.
+# args.noExportMsg      True/False Exclude export control message when set
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
 
@@ -814,9 +831,42 @@ argument.')
 
     # **** Populate the destination data frame
     # As long as there is a list of instrument objects,
+    # create a new file, erasing any existing with the same name,
+    # insert the export compliance message (if not shut off), and then
     # loop thru the instruments and merge the data into the destination data frame
     if instData:
         df_dest = df_dateRange
+        # create a new file for writing, deleting any existing version
+        try:
+            outFile = open(args.outputFileName, 'w', encoding=args.destEncoding)
+        except:
+            print('Error opening the output file. Nothing written.')
+            quit()
+
+        # generate the export compliance warning, unless explicitly omitted
+        if not args.noExportMsg:
+            expCompWarn = \
+['WARNING - This document contains technical data export of which',
+'is restricted by the Export Administration Regulations (EAR).',
+'Release of this document is only authorized for the use of the',
+'Institute of Plasma Physics the Chinese Academy of Sciences (ASIPP)',
+'the ITER Organization and its duly ratified member nations and their technical',
+'representatives for the development of fusion energy for peaceful purposes',
+'as defined under export license D513109.',
+'Violations of these export laws and regulations are subject to severe',
+'civil and criminal penalties.\n\n']
+
+            # write the output file
+            print('Writing the output file\n')
+            csv.register_dialect('csvDialect', escapechar=' ',
+                                lineterminator='\n', quoting=csv.QUOTE_NONE)
+            csvWriter = csv.writer(outFile, dialect='csvDialect')
+            for row in expCompWarn:
+                print(row)
+                csvWriter.writerow([row])
+
+        # append the instrument data to the destination data frame.
+        # This is where it all comes together ...
         for inst in instData:
             df_dest = pd.merge_asof(df_dest, inst._df,
                                     left_index = True, right_index = True)
@@ -825,11 +875,19 @@ argument.')
         # are not tripped up with NaN
         df_dest.fillna(0.0, inplace = True)
 
-    print('Writing the output file\n')
-    #print(df_dest)
-    # **** Write the destination data frame to the output file
-    df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
-            encoding=args.destEncoding)
+        #print(df_dest)
+        try:
+            # **** Write the destination data frame to the output file
+            df_dest.to_csv(outFile, sep=args.destDelimiter,
+                                                    encoding=args.destEncoding)
+        except:
+            print('Error writing data to the file. Output file content is suspect.')
+        outFile.close()
+    #       df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
+    #            encoding=args.destEncoding)
+    else:
+        print('No instrument data found. Nothing written\n')
+
 else:
     print('No data found. Nothing written\n')
 
