@@ -338,11 +338,11 @@ class TsIdxData(object):
             try:
                 inferFreq = pd.infer_freq(self._df.index)
                 if inferFreq is not None:
-                    self._freq = inferFreq
+                    self._timeOffset = to_offset(inferFreq)
                 else:
-                    self._freq = None
+                    self._timeOffset = None
             except:
-                inferFreq = None
+                self._timeOffset = None
 
             # **** statistics
             # get the start and end timestamps
@@ -441,49 +441,95 @@ class TsIdxData(object):
         return(outputMsg)
 
     def resample(resampleArg='S', stats='m'):
-        # Resample (modify) the data frame.
-        # Create a resampled dataframe with the specified stats.
-        # Use the frequency property to determine if we are up or
-        # down sampling.
-        # Turn the resample argument into a valid time offset or leave
+
+        # Resample the data from the complete dataframe.
+        # Determine if we are up or down sampling by comparing the
+        # specified frequency (time offset) with the data frequency.
+        # If the data is being upsampled (increase the frequency), than values
+        # will be forward filled to populate gaps in the data.
+        # If the data is being downsampled (decrease in frequency), then the
+        # specified stats will be calculated on values that fall between those
+        # being sampled.
+        #
+        # Make sure the resample argument is valid
         if resampleArg == '' or resampleArg is None:
             # no sample period specified, use 1 second
+            print('Invalid resample period specified. Using 1 Second.')
             resampleTo = to_offset('S')
         else:
             try:
                 resampleTo = to_offset(resampleArg)
             except:
-                print('Invalid resampling frequency specified. Using 1 second.')
+                print('Invalid resample period specified. Using 1 second.')
                 resampleTo = to_offset('S')
 
+        if resampleTo > self.timeOffset:
+            # Data will be upsampled. We'll have more rows than data.
+            # Forward fill the data for the new rows -- a new row will use the
+            # previous recorded value until a new recorded value is available.
+            # In other words -- carry a value forward until a new one is avail.
+            # The stats argument is ignored.
+            #
+            # Create a new data frame with a timestamp and value column, and 
+            # force the data type to timestamp and float
+            dfResample = pd.DataFrame(columns=[self._tsName])
+            dfResample[self._yName] = np.NaN
+            dfResample = dfResample.astype({self._yName: float}, errors = 'ignore')
+            dfResample[self._tsName] = \
+                pd.to_datetime(dfResample[self._tsName], errors='coerce')
+            # set the timestamp as the index
+            dfResample.set_index(self._tsName, inplace=True)
+            # upsample the data
+            try:
+                dfResample[self._yName] = \
+                        self._df.iloc[:,0].resample(resampleTo).pad()
+                # print a message
+                print(self.name + ' upsampled from ' + str(self.timeOffset) + \
+                     ' to ' + str(resampleTo))
+                # update the object frequency
+                self._timeOffset = resampleTo
+                # now overwrite the original dataframe with the resampled one
+                # and delete the resampled one
+                self._df = dfResample
+                del dfResample
+                return
+            except:
+                print('Unable to resample data. Data unchanged. Frequency is '+ \
+                      str(self.timeOffset))
 
-        # create an empty data frame with the column names
-        # include statistical columns that are specified
+        elif resampleArg < self.timeOffset:
+            # Data will be downsampled. We'll have more data than rows.
+            # This means we can calculate statistics on the values between
+            # those being displayed.  Use the stats option to determine which
+            # stats are to be calculated.
 
-        # make stats not case sensitive
-        if stats is not None:
-            self._stats = str(stats).lower()
+            # make stats not case sensitive
+            if stats is not None:
+                self._stats = str(stats).lower()
 
-        # determine the stat flags. These are used below to decide which
-        # columns to make and calculate. Display the stat if the representative
-        # character is in the stats argument. Find returns -1 if not found
-        displayValStat = stats.find('v') > -1
-        displayMinStat = stats.find('i') > -1
-        displayMaxStat = stats.find('x') > -1
-        displayMeanStat = stats.find('m') > -1 or stats.find('a') > -1
-        displayStdStat = stats.find('s') > -1
-        # If none of the flags are set, an invalid string must have been
-        # passed. Display just the mean, and set the stats string accordingly
-        if not displayValStat and not displayMinStat and \
-                not displayMaxStat and not displayMeanStat and not displayStdStat:
-            displayMeanStat = True
-            stats = 'm'
+            # Determine 
+
+            # determine the stat flags. These are used below to decide which
+            # columns to make and calculate. Display the stat if the representative
+            # character is in the stats argument. Find returns -1 if not found
+            displayValStat = stats.find('v') > -1
+            displayMinStat = stats.find('i') > -1
+            displayMaxStat = stats.find('x') > -1
+            displayMeanStat = stats.find('m') > -1 or stats.find('a') > -1
+            displayStdStat = stats.find('s') > -1
+            # If none of the flags are set, an invalid string must have been
+            # passed. Display just the mean, and set the stats string accordingly
+            if not displayValStat and not displayMinStat and \
+               not displayMaxStat and not displayMeanStat and \
+               not displayStdStat:
+                displayMeanStat = True
+                stats = 'm'
                 
-        minColName = 'min_' + self._name
-        maxColName = 'max_' + self._name
-        meanColName = 'mean_'+ self._name
-        stdColName = 'std_' + self._name
-        dfResample = pd.DataFrame(columns=[self._tsName])
+            minColName = 'min_' + self._name
+            maxColName = 'max_' + self._name
+            meanColName = 'mean_'+ self._name
+            stdColName = 'std_' + self._name
+            dfResample = pd.DataFrame(columns=[self._tsName])
         if displayValStat:
             self._dfResample[self._yName] = np.NaN
             self._dfResample = self._dfResample.astype({self._yName: float}, errors = 'ignore')
@@ -506,31 +552,21 @@ class TsIdxData(object):
 
         # set the timestamp as the index
         self._dfResample.set_index(self._tsName, inplace=True)
-
-        # Resample the data from the complete dataframe.
-        # Determine if we are up or down sampling by comparing the
-        # specified frequency (time offset) with the data frequency.
-        # If the data is being upsampled (increase the frequency), than values
-        # will be forward filled to populate gaps in the data.
-        # If the data is being downsampled (decrease in frequency), then the
-        # specified stats will be calculated on values that fall between those
-        # being sampled.
-        # Get the value to resample using iloc and the column number
-        # so we don't need the column name.
-        # Populate the statistics columns based on what statistics
-        # were specified
-        if resampleArg > self.timeOffset:
-            # data is being upsampled. We'll have more rows than data, so
-            # forward fill the data for the new rows.
-            self._dfResample[self._yName] = \
-                    self._df.iloc[:,0].resample(resampleArg).pad()
-        elif resampleArg < self.timeOffset:
-            pass
-            # TODO: do downsample scenario
+            #
+            # Create a new data frame with a timestamp and value column, and 
+            # force the data type to timestamp and float
+            dfResample = pd.DataFrame(columns=[self._tsName])
+            dfResample[self._yName] = np.NaN
+            dfResample = dfResample.astype({self._yName: float}, errors = 'ignore')
+            dfResample[self._tsName] = \
+                pd.to_datetime(dfResample[self._tsName], errors='coerce')
+            # set the timestamp as the index
+            dfResample.set_index(self._tsName, inplace=True)
+            return
         else:
             # resampling not needed. Specified freq matches data already
             print('Resampling was specified, but new frequency matches exiting \
-frequency. Nothing to do. Data unchanged.)'
+frequency. Nothing to do. Data unchanged.')
             return
            
 
@@ -587,15 +623,8 @@ frequency. Nothing to do. Data unchanged.)'
         return self._df
 
     @property
-    def freq(self):
-        return self._freq
-
-    @property
     def timeOffset(self):
-        if self._freq is None:
-            return None
-        else:
-            return to_offset(self._freq)
+        return self._timeOffset
 
     @property
     def startTs(self):
