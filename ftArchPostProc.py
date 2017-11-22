@@ -119,8 +119,7 @@ import pandas as pd
 # TODO: Put this def in a module and import it
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
-            valueQuery=None, startQuery=None, endQuery=None, resample=None,
-            stats=None):
+            valueQuery=None, startQuery=None, endQuery=None):
         self._name = str(name) # use the string version
 
         # default x-axis (timestamp) label to 'timestamp' if nothing is specified
@@ -145,32 +144,6 @@ class TsIdxData(object):
             # something specified for the value  query string (vq)
             # make sure it is a string, and convert to lower case
             self._vq = str(valueQuery).lower()
-
-        # Get the string version of the resample argumnet
-        if resample is None:
-            self._resample = ''
-        else:
-            # get the string version
-            self._resample = str(resample.upper())
-
-        # Get the stats to calc. Use the passed in string or default to ave.
-        if stats is None or stats == '':
-            self._stats = 'm'
-        else:
-            self._stats = str(stats).lower()
-        # determine the stat flags. Display the stat if the representative
-        # character is in the stats argument. Find returns -1 if not found
-        displayValStat = self._stats.find('v') > -1
-        displayMinStat = self._stats.find('i') > -1
-        displayMaxStat = self._stats.find('x') > -1
-        displayMeanStat = self._stats.find('m') > -1 or self._stats.find('a') > -1
-        displayStdStat = self._stats.find('s') > -1
-        # If none of the flags are set, an invalid string must have been
-        # passed. Display just the mean, and set the stats string accordingly
-        if not displayValStat and not displayMinStat and \
-                not displayMaxStat and not displayMeanStat and not displayStdStat:
-            displayMeanStat = True
-            self._stats = 'm'
 
         # Convert the start and end times to datetimes if they are specified.
         # Use the dateutil.parser function to get input flexability, and then
@@ -207,7 +180,7 @@ class TsIdxData(object):
         if endQuery is None:
             self._endQuery = None
         else:
-            # see if it is already a datetime. If it is, no need to do
+            # see if it is already a datetime. If it is, just update the member
             # anything. If it isn't then convert it. If there is a conversion
             # error, set to none and print a message
             if not isinstance(endQuery, pd.datetime):
@@ -219,53 +192,42 @@ class TsIdxData(object):
                     if self._endQuery.time() == time(0,0,0,0):
                         self._endQuery = self._endQuery.replace(hour=23, minute=59, 
                                                   second=59, microsecond=999999)
+
                     # convert to a pandas datetime for max compatibility
                     self._endQuery = pd.to_datetime(self._endQuery, errors='coerce',
                                             box=True,
                                             infer_datetime_format=True,
                                             origin='unix')
+
                 except:
                     # not convertable ... invalid ... ignore
                     print('Invalid end query. Ignoring.')
                     self._endQuery = None
             else:
-                # no need to convert
+                # no need to convert. Update the member
                 self._endQuery = endQuery
+
+                # assume the end time of midnight means end time info was not
+                # specified. Force it to the end of the day
+                if self._endQuery.time() == time(0,0,0,0):
+                    self._endQuery = self._endQuery.replace(hour=23, minute=59, 
+                                              second=59, microsecond=999999)
+
+                # convert to a pandas datetime for max compatibility
+                self._endQuery = pd.to_datetime(self._endQuery, errors='coerce',
+                                        box=True,
+                                        infer_datetime_format=True,
+                                        origin='unix')
 
         if df is None:
             # No source specified ...
-            # create different columns if resampling
-            if self._resample == '':
-                # not resampling ...
-                # create an empty data frame with the column names
-                self._df = pd.DataFrame(columns=[self._tsName, self._yName])
-                # force the columns to have the data types of datetime and float
-                self._df[self._yName] = self._df[self._yName].astype('float',
-                                                        errors='ignore')
-            else:
-                # resample case
-                # create an empty data frame with the column names
-                # include statistical columns that are specified
-                minColName = 'min_' + self._name
-                maxColName = 'max_' + self._name
-                meanColName = 'mean_'+ self._name
-                stdColName = 'std_' + self._name
-                self._df = pd.DataFrame(columns=[self._tsName])
-                if displayValStat:
-                    self._df[self._yName] = np.NaN
-                    self._df = self._df.astype({self._yName: float}, errors = 'ignore')
-                if displayMinStat:
-                    self._df[minColName] = np.NaN
-                    self._df = self._df.astype({minColName: float}, errors = 'ignore')
-                if displayMaxStat:
-                    self._df[maxColName] = np.NaN
-                    self._df = self._df.astype({maxColName: float}, errors = 'ignore')
-                if displayMeanStat:
-                    self._df[meanColName] = np.NaN
-                    self._df = self._df.astype({meanColName: float}, errors = 'ignore')
-                if displayStdStat:
-                    self._df[stdColName] = np.NaN
-                    self._df = self._df.astype({stdColName: float}, errors = 'ignore')
+            # create an empty data frame
+            # not resampling ...
+            # create an empty data frame with the column names
+            self._df = pd.DataFrame(columns=[self._tsName, self._yName])
+            # force the columns to have the data types of datetime and float
+            self._df[self._yName] = self._df[self._yName].astype('float',
+                                                    errors='ignore')
 
             # force the timestamp to a datetime
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
@@ -274,20 +236,10 @@ class TsIdxData(object):
             self._df.set_index(self._tsName, inplace=True)
 
             # set the other properties
-            self._freq = np.NaN
+            self._timeOffset = np.NaN
 
             # **** statistics -- set to 0
-            # Set the start and end timestamps to something not likely
-            self._startTs = pd.NaT
-            self._endTs = pd.NaT
-
-            # clear the count, min, max, median, mean
-            # median values
-            self._count = 0
-            self._min = 0
-            self._max = 0
-            self._median = 0
-            self._mean = 0
+            ClearStats()
         else:
             # Source data is specified ...
             # Capture the source data
@@ -345,82 +297,7 @@ class TsIdxData(object):
                 self._timeOffset = None
 
             # **** statistics
-            # get the start and end timestamps
-            self._startTs = self._df.index.min()
-            self._endTs = self._df.index.max()
-
-            # get the count, min, max, mean, median values
-            self._count = self._df[self._yName].count()
-            self._min = self._df[self._yName].min()
-            self._max = self._df[self._yName].max()
-            self._median = self._df[self._yName].median()
-            self._mean = self._df[self._yName].mean()
-
-            # At this point we are done if we are not resampling.  If we are
-            # resampling, then create a resampled dataframe, and use the whole
-            # dataframe to resample. Once done, overwrite the dataframe with
-            # the resampled one.
-            if self._resample != '':
-                # resample case
-                # create an empty data frame with the column names
-                # include statistical columns that are specified
-                
-                minColName = 'min_' + self._name
-                maxColName = 'max_' + self._name
-                meanColName = 'mean_'+ self._name
-                stdColName = 'std_' + self._name
-                self._dfResample = pd.DataFrame(columns=[self._tsName])
-                if displayValStat:
-                    self._dfResample[self._yName] = np.NaN
-                    self._dfResample = self._dfResample.astype({self._yName: float}, errors = 'ignore')
-                if displayMinStat:
-                    self._dfResample[minColName] = np.NaN
-                    self._dfResample = self._dfResample.astype({minColName: float}, errors = 'ignore')
-                if displayMaxStat:
-                    self._dfResample[maxColName] = np.NaN
-                    self._dfResample = self._dfResample.astype({maxColName: float}, errors = 'ignore')
-                if displayMeanStat:
-                    self._dfResample[meanColName] = np.NaN
-                    self._dfResample = self._dfResample.astype({meanColName: float}, errors = 'ignore')
-                if displayStdStat:
-                    self._dfResample[stdColName] = np.NaN
-                    self._dfResample = self._dfResample.astype({stdColName: float}, errors = 'ignore')
-
-                # force the timestamp to a datetime datatype
-                self._dfResample[self._tsName] = \
-                    pd.to_datetime(self._dfResample[self._tsName], errors='coerce')
-
-                # set the timestamp as the index
-                self._dfResample.set_index(self._tsName, inplace=True)
-
-                # resample the data from the complete dataframe. Get the value
-                # to resample using iloc so we don't need the column name.
-                # Populate the statistics columns based on what statistics
-                # were specified
-                if displayValStat:
-                    self._dfResample[self._yName] = \
-                            self._df.iloc[:,0].resample(self._resample).first()
-
-                if displayMinStat:
-                    self._dfResample[minColName] = \
-                            self._df.iloc[:,0].resample(self._resample).min()
-
-                if displayMaxStat:
-                    self._dfResample[maxColName] = \
-                            self._df.iloc[:,0].resample(self._resample).max()
-
-                if displayMeanStat:
-                    self._dfResample[meanColName] = \
-                            self._df.iloc[:,0].resample(self._resample).mean()
-
-                if displayStdStat:
-                    self._dfResample[stdColName] = \
-                            self._df.iloc[:,0].resample(self._resample).std()
-                
-                # now overwrite the original dataframe with the resampled one
-                # and delete the resampled one
-                self._df = self._dfResample
-                del self._dfResample
+            CalcStats()
 
     def __repr__(self):
         colList= list(self._df.columns.values)
@@ -429,19 +306,47 @@ class TsIdxData(object):
 'datatype: ', str(self._df.index.dtype) + '\n')
         outputMsg+= '{:8} {:18} {:10} {}'.format('Y axis: ', str(colList[0]), \
 'datatype: ', str(self._df[colList[0]].dtype) + '\n')
-        outputMsg+= '{:14} {}'.format('Value Query: ', self._vq + '\n')
-        outputMsg+= '{:14} {}'.format('Start Time: ', str(self._startTs) + '\n')
-        outputMsg+= '{:14} {}'.format('End Time: ', str(self._endTs) + '\n')
-        outputMsg+= '{:14} {}'.format('Value Count: ', str(self._count) + '\n')
-        outputMsg+= '{:14} {}'.format('Min Value: ', str(self._min) + '\n')
-        outputMsg+= '{:14} {}'.format('Max Value: ', str(self._max) + '\n')
-        outputMsg+= '{:14} {}'.format('Median Value: ', str(self._median) + '\n')
-        outputMsg+= '{:14} {}'.format('Mean Value: ', str(self._mean) + '\n')
+        outputMsg+= '{:15} {}'.format('Value Query: ', self._vq + '\n')
+        outputMsg+= '{:15} {}'.format('Start Time: ', str(self._startTs) + '\n')
+        outputMsg+= '{:15} {}'.format('End Time: ', str(self._endTs) + '\n')
+        outputMsg+= '{:15} {}'.format('Sample Period: ', str(self._timeOffset) + '\n')
+        outputMsg+= '{:15} {}'.format('Value Count: ', str(self._count) + '\n')
+        outputMsg+= '{:15} {}'.format('Min Value: ', str(self._min) + '\n')
+        outputMsg+= '{:15} {}'.format('Max Value: ', str(self._max) + '\n')
+        outputMsg+= '{:15} {}'.format('Median Value: ', str(self._median) + '\n')
+        outputMsg+= '{:15} {}'.format('Mean Value: ', str(self._mean) + '\n\n')
         outputMsg+= str(self._df) + '\n'
         return(outputMsg)
 
-    def resample(resampleArg='S', stats='m'):
+    def CalcStats():
+        # get the start and end timestamps
+        self._startTs = self._df.index.min()
+        self._endTs = self._df.index.max()
 
+        # get the count, min, max, mean, median values
+        self._count = self._df[self._yName].count()
+        self._min = self._df[self._yName].min()
+        self._max = self._df[self._yName].max()
+        self._median = self._df[self._yName].median()
+        self._mean = self._df[self._yName].mean()
+        self._stdDev = self._df[self._yName].std()
+        return
+
+    def ClearStats():
+        # Set the start and end timestamps to nothing
+        self._startTs = pd.NaT
+        self._endTs = pd.NaT
+
+        # clear the count, min, max, median, mean
+        self._count = 0
+        self._min = 0
+        self._max = 0
+        self._median = 0
+        self._mean = 0
+        self._stdDev = 0
+        return
+
+    def resample(resampleArg='S', stats='m'):
         # Resample the data from the complete dataframe.
         # Determine if we are up or down sampling by comparing the
         # specified frequency (time offset) with the data frequency.
@@ -492,11 +397,12 @@ class TsIdxData(object):
                 # and delete the resampled one
                 self._df = dfResample
                 del dfResample
+                CalcStats()
                 return
             except:
                 print('Unable to resample data. Data unchanged. Frequency is '+ \
                       str(self.timeOffset))
-
+                return
         elif resampleArg < self.timeOffset:
             # Data will be downsampled. We'll have more data than rows.
             # This means we can calculate statistics on the values between
@@ -507,9 +413,8 @@ class TsIdxData(object):
             if stats is not None:
                 self._stats = str(stats).lower()
 
-            # Determine 
-
-            # determine the stat flags. These are used below to decide which
+            # Determine column names.
+            # Determine the stat flags. These are used below to decide which
             # columns to make and calculate. Display the stat if the representative
             # character is in the stats argument. Find returns -1 if not found
             displayValStat = stats.find('v') > -1
@@ -529,74 +434,75 @@ class TsIdxData(object):
             maxColName = 'max_' + self._name
             meanColName = 'mean_'+ self._name
             stdColName = 'std_' + self._name
-            dfResample = pd.DataFrame(columns=[self._tsName])
-        if displayValStat:
-            self._dfResample[self._yName] = np.NaN
-            self._dfResample = self._dfResample.astype({self._yName: float}, errors = 'ignore')
-        if displayMinStat:
-            self._dfResample[minColName] = np.NaN
-            self._dfResample = self._dfResample.astype({minColName: float}, errors = 'ignore')
-        if displayMaxStat:
-            self._dfResample[maxColName] = np.NaN
-            self._dfResample = self._dfResample.astype({maxColName: float}, errors = 'ignore')
-        if displayMeanStat:
-            self._dfResample[meanColName] = np.NaN
-            self._dfResample = self._dfResample.astype({meanColName: float}, errors = 'ignore')
-        if displayStdStat:
-            self._dfResample[stdColName] = np.NaN
-            self._dfResample = self._dfResample.astype({stdColName: float}, errors = 'ignore')
 
-        # force the timestamp to a datetime datatype
-        self._dfResample[self._tsName] = \
-            pd.to_datetime(self._dfResample[self._tsName], errors='coerce')
-
-        # set the timestamp as the index
-        self._dfResample.set_index(self._tsName, inplace=True)
-            #
-            # Create a new data frame with a timestamp and value column, and 
-            # force the data type to timestamp and float
+            # Create a new data frame with a timestamp and value column(s), and 
+            # force the data type(s) to timestamp and float
             dfResample = pd.DataFrame(columns=[self._tsName])
-            dfResample[self._yName] = np.NaN
-            dfResample = dfResample.astype({self._yName: float}, errors = 'ignore')
+            if displayValStat:
+                dfResample[self._yName] = np.NaN
+                dfResample = dfResample.astype({self._yName: float}, errors = 'ignore')
+            if displayMinStat:
+                dfResample[minColName] = np.NaN
+                dfResample = dfResample.astype({minColName: float}, errors = 'ignore')
+            if displayMaxStat:
+                dfResample[maxColName] = np.NaN
+                dfResample = dfResample.astype({maxColName: float}, errors = 'ignore')
+            if displayMeanStat:
+                dfResample[meanColName] = np.NaN
+                dfResample = dfResample.astype({meanColName: float}, errors = 'ignore')
+            if displayStdStat:
+                dfResample[stdColName] = np.NaN
+                dfResample = dfResample.astype({stdColName: float}, errors = 'ignore')
+
+            # force the timestamp to a datetime datatype
             dfResample[self._tsName] = \
                 pd.to_datetime(dfResample[self._tsName], errors='coerce')
+
             # set the timestamp as the index
             dfResample.set_index(self._tsName, inplace=True)
-            return
+
+            # now do the resampling for each column
+            try:
+                if displayValStat:
+                    dfResample[self._yName] = \
+                            self._df.iloc[:,0].resample(resampleTo).pad()
+
+                if displayMinStat:
+                    dfResample[minColName] = \
+                            self._df.iloc[:,0].resample(resampleTo).min()
+
+                if displayMaxStat:
+                    dfResample[maxColName] = \
+                            self._df.iloc[:,0].resample(resampleTo).max()
+
+                if displayMeanStat:
+                    dfResample[meanColName] = \
+                            self._df.iloc[:,0].resample(resampleTo).mean()
+
+                if displayStdStat:
+                    dfResample[stdColName] = \
+                            self._df.iloc[:,0].resample(resampleTo).std()
+                # print a message
+                print(self.name + ' downsampled from ' + str(self.timeOffset) + \
+                     ' to ' + str(resampleTo))
+                # update the object frequency
+                self._timeOffset = resampleTo
+                # now overwrite the original dataframe with the resampled one
+                # and delete the resampled one
+                self._df = dfResample
+                del dfResample
+                CalcStats()
+                return
+            except:
+                print('Unable to resample data. Data unchanged. Frequency is '+ \
+                      str(self.timeOffset))
+                return
         else:
             # resampling not needed. Specified freq matches data already
             print('Resampling was specified, but new frequency matches exiting \
-frequency. Nothing to do. Data unchanged.')
+frequency. Nothing to do. Data unchanged. Frequency is ' + str(self.timeOffsdet))
             return
            
-
-
-        if displayValStat:
-            self._dfResample[self._yName] = \
-                    self._df.iloc[:,0].resample(self._resample).first()
-
-        if displayMinStat:
-            self._dfResample[minColName] = \
-                    self._df.iloc[:,0].resample(self._resample).min()
-
-        if displayMaxStat:
-            self._dfResample[maxColName] = \
-                    self._df.iloc[:,0].resample(self._resample).max()
-
-        if displayMeanStat:
-            self._dfResample[meanColName] = \
-                    self._df.iloc[:,0].resample(self._resample).mean()
-
-        if displayStdStat:
-            self._dfResample[stdColName] = \
-                    self._df.iloc[:,0].resample(self._resample).std()
-        
-        # now overwrite the original dataframe with the resampled one
-        # and delete the resampled one
-        self._df = self._dfResample
-        del self._dfResample
-        
-
     # read only properties
     @property
     def name(self):
@@ -653,6 +559,10 @@ frequency. Nothing to do. Data unchanged.')
     @property
     def mean(self):
         return self._mean
+
+    @property
+    def stdDev(self):
+        return self._std
 
 
 print('*** Begin Processing ***')
@@ -860,16 +770,28 @@ else:
 # repeat for end time
 if args.endTime is not None:
     # Convert the argument to a datetime. If it can't be converted, ignore it.
-    # need to convert
     try:
         endArg = duparser.parse(args.endTime, fuzzy=True)
         # convert to a pandas datetime for max compatibility
         endArg = pd.to_datetime(endArg, errors='coerce', box=True,
                                   infer_datetime_format=True, origin='unix')
+
+        # assume the end time of midnight means end time info was not
+        # specified. Force it to the end of the day
+        if endArg.time() == time(0,0,0,0):
+            endArg = endArg.replace(hour=23, minute=59, 
+                                    second=59, microsecond=999999)
+
+        # convert to a pandas datetime for max compatibility
+        endArg = pd.to_datetime(endArg, errors='coerce',
+                                box=True,
+                                infer_datetime_format=True,
+                                origin='unix')
     except:
         # not convertable ... invalid ... ignore
         print('Invalid end time. Ignoring.')
         endArg = None
+    
 else:
     # arg is none, so update the internal version
     endArg = None
@@ -934,8 +856,7 @@ if args.t and len(headerList) >= 2:
         # Querying of value and filtering of timestamps will happen during
         # construction of the object
         instData.append(TsIdxData(instName, tsName, valName, iDframe,
-            args.valueQuery, startArg, endArg, resample = resampleArg,
-            stats = stats))
+                                  args.valueQuery, startArg, endArg))
 
 elif args.a and len(headerList) >= 2:
     # archive data, and there are at least two (time/value pair) cols
@@ -1058,7 +979,7 @@ argument.')
 'Violations of these export laws and regulations are subject to severe',
 'civil and criminal penalties.\n\n']
 
-            # write the output file
+            # write to the output file
             print('Writing the output file\n')
             csv.register_dialect('csvDialect', escapechar=' ',
                                 lineterminator='\n', quoting=csv.QUOTE_NONE)
@@ -1070,6 +991,9 @@ argument.')
         # append the instrument data to the destination data frame.
         # This is where it all comes together ...
         for inst in instData:
+            # first, resample the instrument data if it needs to be
+            inst.resample(resampleArg, stats)
+            # merge the instrument data with the master dataframe
             df_dest = pd.merge_asof(df_dest, inst._df,
                                     left_index = True, right_index = True)
 
