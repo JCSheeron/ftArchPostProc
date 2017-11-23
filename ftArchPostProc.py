@@ -102,6 +102,8 @@
 # on when the names change due to resampling (downsampling)? Force the value
 # column always and always use this? Use the 1st (0th) column always? Something
 # else?
+# TODO: Print start and time messages to the screen.
+# TODO: Not parsing dump data correctly. Problem wiht 10ms freq?
 #
 # imports
 # date and time stuff
@@ -300,6 +302,7 @@ class TsIdxData(object):
                     self._timeOffset = None
             except:
                 self._timeOffset = None
+            print(self._timeOffset)
 
             # **** statistics
             self.CalcStats()
@@ -472,26 +475,33 @@ unchanged. Frequency is ' + str(self.timeOffset))
             dfResample.set_index(self._tsName, inplace=True)
 
             # now do the resampling for each column
+            # NOTE: fractional seconds can make merging appear to behave
+            # strangely if precision gets truncated.
             try:
                 if displayValStat:
                     dfResample[self._yName] = \
-                            self._df.iloc[:,0].resample(resampleTo).pad()
+                            self._df.iloc[:,0].resample(resampleTo,
+                            label='right', closed='right').last()
 
                 if displayMinStat:
                     dfResample[minColName] = \
-                            self._df.iloc[:,0].resample(resampleTo).min()
+                            self._df.iloc[:,0].resample(resampleTo,
+                            label='right', closed='right').min()
 
                 if displayMaxStat:
                     dfResample[maxColName] = \
-                            self._df.iloc[:,0].resample(resampleTo).max()
+                            self._df.iloc[:,0].resample(resampleTo,
+                            label='right', closed='right').max()
 
                 if displayMeanStat:
                     dfResample[meanColName] = \
-                            self._df.iloc[:,0].resample(resampleTo).mean()
+                            self._df.iloc[:,0].resample(resampleTo,
+                            label='right', closed='right').mean()
 
                 if displayStdStat:
                     dfResample[stdColName] = \
-                            self._df.iloc[:,0].resample(resampleTo).std()
+                            self._df.iloc[:,0].resample(resampleTo,
+                            label='right', closed='right').std()
                 # print a message
                 print(self.name + ': Downsampled from ' + str(self.timeOffset) + \
                      ' to ' + str(resampleTo))
@@ -935,6 +945,9 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     # is inside the argument values
     startTime = max(startTime, startArg)
     endTime = min(endTime, endArg)
+    # force the start time to start on a whole number of seconds to avoid weird
+    # merge behavior with fractional seconds
+    startTime = startTime.replace(microsecond=0)
 
     # **** Make sure the resampleArg is either the value specified or the
     # minimum of the instrument data frequencies if nothing was specified.
@@ -955,6 +968,7 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     except:
         print('Error: Problem with generated date/time range. Check the resample \
 argument.')
+        print('Error: ', sys.exc_info())
         quit()
 
     # Make sure the date range is sorted. This is needed for the
@@ -1004,10 +1018,15 @@ argument.')
         for inst in instData:
             # first, resample the instrument data if it needs to be
             inst.resample(resampleArg, stats)
-            # merge the instrument data with the master dataframe
+            # Merge the instrument data with the master dataframe.
+            # The forward direction means to take the first instrument value
+            # that is on or after the master date range.
+            # NOTE: Backward can appear to work strangely when fractional
+            # seconds are being used, and results are perhaps truncated or
+            # rounded.
             df_dest = pd.merge_asof(df_dest, inst._df,
                                     left_index = True, right_index = True,
-                                    direction = 'forward')
+                                    direction = 'backward')
 
         # replace any NaN values in the resulting data frame with 0s so data users
         # are not tripped up with NaN
