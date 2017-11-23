@@ -98,7 +98,11 @@
 # 
 # TODO: Move Timestamp Indexed data class (TsIdxData) to a module
 # TODO: Improved Error handling. Currently, error handling is minimal
-
+# TODO: Decide how to handle CalcStats function:  What columns do we run stats
+# on when the names change due to resampling (downsampling)? Force the value
+# column always and always use this? Use the 1st (0th) column always? Something
+# else?
+#
 # imports
 # date and time stuff
 from datetime import datetime, time
@@ -239,7 +243,7 @@ class TsIdxData(object):
             self._timeOffset = np.NaN
 
             # **** statistics -- set to 0
-            ClearStats()
+            self.ClearStats()
         else:
             # Source data is specified ...
             # Capture the source data
@@ -257,7 +261,8 @@ class TsIdxData(object):
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                 errors='coerce',
                                                 box = True, 
-                                                format = "%-m/%-d/%Y %H:%M:$S",
+                                                format = "%-m/%-d/%Y %H:%M:$S.%f",
+                                                #unit = 'ms',
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
             # get rid of any NaN and NaT timestamps. These can be from the
@@ -297,7 +302,7 @@ class TsIdxData(object):
                 self._timeOffset = None
 
             # **** statistics
-            CalcStats()
+            self.CalcStats()
 
     def __repr__(self):
         colList= list(self._df.columns.values)
@@ -310,19 +315,21 @@ class TsIdxData(object):
         outputMsg+= '{:15} {}'.format('Start Time: ', str(self._startTs) + '\n')
         outputMsg+= '{:15} {}'.format('End Time: ', str(self._endTs) + '\n')
         outputMsg+= '{:15} {}'.format('Sample Period: ', str(self._timeOffset) + '\n')
+        """
         outputMsg+= '{:15} {}'.format('Value Count: ', str(self._count) + '\n')
         outputMsg+= '{:15} {}'.format('Min Value: ', str(self._min) + '\n')
         outputMsg+= '{:15} {}'.format('Max Value: ', str(self._max) + '\n')
         outputMsg+= '{:15} {}'.format('Median Value: ', str(self._median) + '\n')
         outputMsg+= '{:15} {}'.format('Mean Value: ', str(self._mean) + '\n\n')
+        """
         outputMsg+= str(self._df) + '\n'
         return(outputMsg)
 
-    def CalcStats():
+    def CalcStats(self):
         # get the start and end timestamps
         self._startTs = self._df.index.min()
         self._endTs = self._df.index.max()
-
+        """
         # get the count, min, max, mean, median values
         self._count = self._df[self._yName].count()
         self._min = self._df[self._yName].min()
@@ -330,9 +337,10 @@ class TsIdxData(object):
         self._median = self._df[self._yName].median()
         self._mean = self._df[self._yName].mean()
         self._stdDev = self._df[self._yName].std()
+        """
         return
 
-    def ClearStats():
+    def ClearStats(self):
         # Set the start and end timestamps to nothing
         self._startTs = pd.NaT
         self._endTs = pd.NaT
@@ -346,7 +354,7 @@ class TsIdxData(object):
         self._stdDev = 0
         return
 
-    def resample(resampleArg='S', stats='m'):
+    def resample(self, resampleArg='S', stats='m'):
         # Resample the data from the complete dataframe.
         # Determine if we are up or down sampling by comparing the
         # specified frequency (time offset) with the data frequency.
@@ -357,18 +365,18 @@ class TsIdxData(object):
         # being sampled.
         #
         # Make sure the resample argument is valid
-        if resampleArg == '' or resampleArg is None:
+        if resampleArg is None:
             # no sample period specified, use 1 second
-            print('Invalid resample period specified. Using 1 Second.')
+            print(self._name + ': Invalid resample period specified. Using 1 Second.')
             resampleTo = to_offset('S')
         else:
             try:
                 resampleTo = to_offset(resampleArg)
             except:
-                print('Invalid resample period specified. Using 1 second.')
+                print(self._name + ': Invalid resample period specified. Using 1 second.')
                 resampleTo = to_offset('S')
 
-        if resampleTo > self.timeOffset:
+        if resampleTo < self.timeOffset:
             # Data will be upsampled. We'll have more rows than data.
             # Forward fill the data for the new rows -- a new row will use the
             # previous recorded value until a new recorded value is available.
@@ -382,6 +390,7 @@ class TsIdxData(object):
             dfResample = dfResample.astype({self._yName: float}, errors = 'ignore')
             dfResample[self._tsName] = \
                 pd.to_datetime(dfResample[self._tsName], errors='coerce')
+
             # set the timestamp as the index
             dfResample.set_index(self._tsName, inplace=True)
             # upsample the data
@@ -389,7 +398,7 @@ class TsIdxData(object):
                 dfResample[self._yName] = \
                         self._df.iloc[:,0].resample(resampleTo).pad()
                 # print a message
-                print(self.name + ' upsampled from ' + str(self.timeOffset) + \
+                print(self.name + ': Upsampled from ' + str(self.timeOffset) + \
                      ' to ' + str(resampleTo))
                 # update the object frequency
                 self._timeOffset = resampleTo
@@ -397,13 +406,14 @@ class TsIdxData(object):
                 # and delete the resampled one
                 self._df = dfResample
                 del dfResample
-                CalcStats()
+                self.CalcStats()
                 return
             except:
-                print('Unable to resample data. Data unchanged. Frequency is '+ \
-                      str(self.timeOffset))
+                print(self._name + ': Unable to resample data. Data \
+unchanged. Frequency is ' + str(self.timeOffset))
+                print('Error: ', sys.exc_info())
                 return
-        elif resampleArg < self.timeOffset:
+        elif resampleTo > self.timeOffset:
             # Data will be downsampled. We'll have more data than rows.
             # This means we can calculate statistics on the values between
             # those being displayed.  Use the stats option to determine which
@@ -483,7 +493,7 @@ class TsIdxData(object):
                     dfResample[stdColName] = \
                             self._df.iloc[:,0].resample(resampleTo).std()
                 # print a message
-                print(self.name + ' downsampled from ' + str(self.timeOffset) + \
+                print(self.name + ': Downsampled from ' + str(self.timeOffset) + \
                      ' to ' + str(resampleTo))
                 # update the object frequency
                 self._timeOffset = resampleTo
@@ -491,16 +501,17 @@ class TsIdxData(object):
                 # and delete the resampled one
                 self._df = dfResample
                 del dfResample
-                CalcStats()
+                self.CalcStats()
                 return
             except:
-                print('Unable to resample data. Data unchanged. Frequency is '+ \
-                      str(self.timeOffset))
+                print(self._name + ': Unable to resample data. Data \
+unchanged. Frequency is ' + str(self.timeOffset))
+                print('Error: ', sys.exc_info())
                 return
         else:
             # resampling not needed. Specified freq matches data already
-            print('Resampling was specified, but new frequency matches exiting \
-frequency. Nothing to do. Data unchanged. Frequency is ' + str(self.timeOffsdet))
+            print(self.name + ': Resampling not needed. New frequency \
+matches data frequency. Data unchanged. Frequency is ' + str(self.timeOffset))
             return
            
     # read only properties
@@ -522,7 +533,7 @@ frequency. Nothing to do. Data unchanged. Frequency is ' + str(self.timeOffsdet)
 
     @property
     def columns(self):
-        return self._columns
+        return self._df.columns.values.tolist()
 
     @property
     def data(self):
@@ -995,7 +1006,8 @@ argument.')
             inst.resample(resampleArg, stats)
             # merge the instrument data with the master dataframe
             df_dest = pd.merge_asof(df_dest, inst._df,
-                                    left_index = True, right_index = True)
+                                    left_index = True, right_index = True,
+                                    direction = 'forward')
 
         # replace any NaN values in the resulting data frame with 0s so data users
         # are not tripped up with NaN
