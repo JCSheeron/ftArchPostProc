@@ -106,6 +106,9 @@
 # TODO: Not parsing dump data correctly. Problem wiht 10ms freq?
 #
 # imports
+#
+# system related
+import sys
 # date and time stuff
 from datetime import datetime, time
 from pandas.tseries.frequencies import to_offset
@@ -263,13 +266,18 @@ class TsIdxData(object):
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                 errors='coerce',
                                                 box = True, 
-                                                format = "%-m/%-d/%Y %H:%M:$S.%f",
+                                                #format = "%m/%d/%Y %H:%M:$S.%f",
                                                 #unit = 'ms',
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
             # get rid of any NaN and NaT timestamps. These can be from the
             # original data or from invalid conversions to datetime
             self._df.dropna(subset=[self._tsName], inplace=True)
+
+            # round the timestamp to the nearest ms. Unseen ns and
+            # fractional ms values are not always displayed, and can cause
+            # unexpected merge and up/downsample results
+            self._df[self._tsName] = self._df[self._tsName].dt.round('L')
 
             # Apply the query string if one is specified.
             # Replace "val" with the column name.
@@ -296,6 +304,7 @@ class TsIdxData(object):
             # and expose below as a property
             try:
                 inferFreq = pd.infer_freq(self._df.index)
+                print('Freq:', inferFreq)
                 if inferFreq is not None:
                     self._timeOffset = to_offset(inferFreq)
                 else:
@@ -481,27 +490,27 @@ unchanged. Frequency is ' + str(self.timeOffset))
                 if displayValStat:
                     dfResample[self._yName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='right', closed='right').last()
+                            label='left', closed='left').first()
 
                 if displayMinStat:
                     dfResample[minColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='right', closed='right').min()
+                            label='left', closed='left').min()
 
                 if displayMaxStat:
                     dfResample[maxColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='right', closed='right').max()
+                            label='left', closed='left').max()
 
                 if displayMeanStat:
                     dfResample[meanColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='right', closed='right').mean()
+                            label='left', closed='left').mean()
 
                 if displayStdStat:
                     dfResample[stdColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='right', closed='right').std()
+                            label='left', closed='left').std()
                 # print a message
                 print(self.name + ': Downsampled from ' + str(self.timeOffset) + \
                      ' to ' + str(resampleTo))
@@ -819,12 +828,13 @@ else:
 
 # get the resample argument
 if args.resample is not None:
-    resampleArg = str(args.resample) # use the string version
+    #resampleArg = str(args.resample) # use the string version
+    resampleArg = to_offset(args.resample) # use the offset version
 else:
     # arg is none, so update the internal version
     resampleArg = None
 
-# force the stats argument to a lower case string
+# force the stats argument to a lower case string so they are case insensitive.
 stats = str(args.stats).lower()
 
 # **** Read the csv file into a data frame.  The first row is treated as the header
@@ -844,7 +854,7 @@ instData = []
 
 # ****Iterate thru the header list.
 # Create desired column names: value_<instName> and timestamp_<instName>
-# Create a instrument data object with data sliced from the big data frame
+# Create a instrument data object witpythonh data sliced from the big data frame
 # look at the -t or -a argument to know what format the data is in 
 if args.t and len(headerList) >= 2:
     # historical trend data, and there are at least two (time/value pair) cols
@@ -945,15 +955,16 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     # is inside the argument values
     startTime = max(startTime, startArg)
     endTime = min(endTime, endArg)
-    # force the start time to start on a whole number of seconds to avoid weird
-    # merge behavior with fractional seconds
-    startTime = startTime.replace(microsecond=0)
+    # force the start time to start on a whole number of msec. Fractional
+    # values can cause issues with merging and resampling.
+    startTime = startTime.floor('L')
 
     # **** Make sure the resampleArg is either the value specified or the
     # minimum of the instrument data frequencies if nothing was specified.
     if resampleArg is None:
         resampleArg = freq
-
+        
+    print('resampleArg:', resampleArg, 'dt:', type(resampleArg))
     # **** Create a daterange data frame to act as the master datetime range.
     # Use the above determined start, end, and frequency
     # The data will get left merged using this data frame for time
@@ -966,8 +977,8 @@ if not pd.isna(startTime) and not pd.isna(endTime):
                                                            endTime,
                                                            freq=resampleArg)})
     except:
-        print('Error: Problem with generated date/time range. Check the resample \
-argument.')
+        print('Error: Problem with generated date/time range. Check the \
+resample argument.')
         print('Error: ', sys.exc_info())
         quit()
 
@@ -1021,9 +1032,10 @@ argument.')
             # Merge the instrument data with the master dataframe.
             # The forward direction means to take the first instrument value
             # that is on or after the master date range.
-            # NOTE: Backward can appear to work strangely when fractional
-            # seconds are being used, and results are perhaps truncated or
-            # rounded.
+            # NOTE: Merge can appear to work strangely when fractional
+            # msec are being used, and results are perhaps truncated or
+            # rounded. Steps were taken during construction to round times to
+            # the nearest msec.
             df_dest = pd.merge_asof(df_dest, inst._df,
                                     left_index = True, right_index = True,
                                     direction = 'backward')
@@ -1033,12 +1045,21 @@ argument.')
         df_dest.fillna(0.0, inplace = True)
 
         #print(df_dest)
-        try:
-            # **** Write the destination data frame to the output file
+        #try:
+        # **** Write the destination data frame to the output file
+        # Include frac sec if frequency is < 1 sec
+        if resampleArg < to_offset('S'):
             df_dest.to_csv(outFile, sep=args.destDelimiter,
-                                                    encoding=args.destEncoding)
-        except:
-            print('Error writing data to the file. Output file content is suspect.')
+                           encoding=args.destEncoding,
+                           date_format ='%Y-%b-%d %H:%M:%S.%f')
+        else:
+            # no need for fractional sec
+            df_dest.to_csv(outFile, sep=args.destDelimiter,
+                           encoding=args.destEncoding,
+                           date_format ='%Y-%b-%d %H:%M:%S')
+        #except:
+        #    print('\nError writing data to the file. Output file content is suspect.\n')
+        #    print('Error: ', sys.exc_info())
         outFile.close()
     #       df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
     #            encoding=args.destEncoding)
