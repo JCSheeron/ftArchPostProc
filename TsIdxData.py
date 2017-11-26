@@ -11,7 +11,7 @@ from datetime import datetime, time
 from pandas.tseries.frequencies import to_offset
 from dateutil import parser as duparser
 
-# import numerical manipulation libraries
+# umerical manipulation libraries
 import numpy as np
 import pandas as pd
 
