@@ -97,13 +97,12 @@
 # message is included unless this argument is specified.
 # 
 # TODO: Move Timestamp Indexed data class (TsIdxData) to a module
-# TODO: Improved Error handling. Currently, error handling is minimal
+# TODO: Improved Error handling? Testing will tell if this is needed.
 # TODO: Decide how to handle CalcStats function:  What columns do we run stats
 # on when the names change due to resampling (downsampling)? Force the value
 # column always and always use this? Use the 1st (0th) column always? Something
 # else?
-# TODO: Print start and time messages to the screen.
-# TODO: Not parsing dump data correctly. Problem wiht 10ms freq?
+# TODO: Not parsing dump data correctly. Problem with 10ms freq?
 #
 # imports
 #
@@ -304,14 +303,12 @@ class TsIdxData(object):
             # and expose below as a property
             try:
                 inferFreq = pd.infer_freq(self._df.index)
-                print('Freq:', inferFreq)
                 if inferFreq is not None:
                     self._timeOffset = to_offset(inferFreq)
                 else:
                     self._timeOffset = None
             except:
                 self._timeOffset = None
-            print(self._timeOffset)
 
             # **** statistics
             self.CalcStats()
@@ -379,7 +376,7 @@ class TsIdxData(object):
         # Make sure the resample argument is valid
         if resampleArg is None:
             # no sample period specified, use 1 second
-            print(self._name + ': Invalid resample period specified. Using 1 Second.')
+            print(self._name + ': No resample period specified. Using 1 Second.')
             resampleTo = to_offset('S')
         else:
             try:
@@ -490,27 +487,27 @@ unchanged. Frequency is ' + str(self.timeOffset))
                 if displayValStat:
                     dfResample[self._yName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').first()
+                            label='right', closed='right').last()
 
                 if displayMinStat:
                     dfResample[minColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').min()
+                            label='right', closed='right').min()
 
                 if displayMaxStat:
                     dfResample[maxColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').max()
+                            label='right', closed='right').max()
 
                 if displayMeanStat:
                     dfResample[meanColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').mean()
+                            label='right', closed='right').mean()
 
                 if displayStdStat:
                     dfResample[stdColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').std()
+                            label='right', closed='right').std()
                 # print a message
                 print(self.name + ': Downsampled from ' + str(self.timeOffset) + \
                      ' to ' + str(resampleTo))
@@ -593,7 +590,6 @@ matches data frequency. Data unchanged. Frequency is ' + str(self.timeOffset))
     @property
     def stdDev(self):
         return self._std
-
 
 print('*** Begin Processing ***')
 # get start processing time
@@ -828,8 +824,12 @@ else:
 
 # get the resample argument
 if args.resample is not None:
-    #resampleArg = str(args.resample) # use the string version
-    resampleArg = to_offset(args.resample) # use the offset version
+    # a resample arg was supplied.  Try to use it, or default to 1 sec.
+    try:
+        resampleArg = to_offset(args.resample) # use the offset version
+    except:
+        print('Invalid resample period specified. Using 1 second')
+        resampleArg = to_offset('S')
 else:
     # arg is none, so update the internal version
     resampleArg = None
@@ -907,26 +907,26 @@ if instData:
     # find the earliest and latest start/end times
     for inst in instData:
         # get the earliest start time
-        if not inst._df.empty and not pd.isna(inst.startTs) and pd.isna(startTime):
+        if not inst.data.empty and not pd.isna(inst.startTs) and pd.isna(startTime):
             # first valid time
             startTime = inst.startTs
-        elif not inst._df.empty and not pd.isna(inst.startTs) and not pd.isna(startTime):
+        elif not inst.data.empty and not pd.isna(inst.startTs) and not pd.isna(startTime):
             # get min 
             startTime = min(startTime, inst.startTs)
 
         # get the latest end time
-        if not inst._df.empty and not pd.isna(inst.endTs) and pd.isna(endTime):
+        if not inst.data.empty and not pd.isna(inst.endTs) and pd.isna(endTime):
             # first valid time
             endTime = inst.endTs
-        elif not inst._df.empty and not pd.isna(inst.endTs) and not pd.isna(endTime):
+        elif not inst.data.empty and not pd.isna(inst.endTs) and not pd.isna(endTime):
             # get the max
             endTime = max(endTime, inst.endTs)
 
         # get the highest frequency in the form of a time offset
-        if not inst._df.empty and not pd.isna(inst.timeOffset) and pd.isna(freq):
+        if not inst.data.empty and not pd.isna(inst.timeOffset) and pd.isna(freq):
             # first valid offset
             freq = inst.timeOffset
-        elif not inst._df.empty and not pd.isna(inst.timeOffset) and not pd.isna(freq):
+        elif not inst.data.empty and not pd.isna(inst.timeOffset) and not pd.isna(freq):
             # get min 
             freq = min(freq, inst.timeOffset)
 
@@ -955,15 +955,30 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     # is inside the argument values
     startTime = max(startTime, startArg)
     endTime = min(endTime, endArg)
-    # force the start time to start on a whole number of msec. Fractional
-    # values can cause issues with merging and resampling.
-    startTime = startTime.floor('L')
 
     # **** Make sure the resampleArg is either the value specified or the
     # minimum of the instrument data frequencies if nothing was specified.
     if resampleArg is None:
         resampleArg = freq
-        
+
+    # Force the start time to start on clean "origin" time. The time range
+    # being merged to needs to start on the same time as the date being merged,
+    # or the stats are misleading -- and the resampling function already does
+    # this.
+    # For example, if '5S' is used, the time being merged to needs to start
+    # on a division of 5 seconds, so it needs to start with a timestamp
+    # ending in 0 or 5 seconds. 
+    startTime = startTime.floor(resampleArg)
+
+    # Print messages so we can see what is going to happen.
+    print('\nThe start time is:', startTime)
+    print('The end time is:', endTime)
+    print('The sampling frequency is:', resampleArg)
+    print('Note that the start and end times are the earliest and latest found \
+in the data unless the start and/or end time options are used.')
+    print('Note that the sample frequency used it the highest found in the \
+data unless the resampling option is used.\n')
+
     # **** Create a daterange data frame to act as the master datetime range.
     # Use the above determined start, end, and frequency
     # The data will get left merged using this data frame for time
@@ -1029,13 +1044,13 @@ resample argument.')
             # first, resample the instrument data if it needs to be
             inst.resample(resampleArg, stats)
             # Merge the instrument data with the master dataframe.
-            # The forward direction means to take the first instrument value
-            # that is on or after the master date range.
-            # NOTE: Merge can appear to work strangely when fractional
-            # msec are being used, and results are perhaps truncated or
-            # rounded. Steps were taken during construction to round times to
-            # the nearest msec.
-            df_dest = pd.merge_asof(df_dest, inst._df,
+            # The backward direction means to take the last instrument value
+            # that is on or before the master date range -- i.e. when merging
+            # to a time not in instrument time, look backward in time to get
+            # the last instrument value 
+            # NOTE: Steps were taken during construction to round times to
+            # the nearest msec, so fractional msecs do not affect the merge.
+            df_dest = pd.merge_asof(df_dest, inst.data,
                                     left_index = True, right_index = True,
                                     direction = 'backward')
 
@@ -1043,25 +1058,22 @@ resample argument.')
         # are not tripped up with NaN
         df_dest.fillna(0.0, inplace = True)
 
-        #print(df_dest)
-        #try:
-        # **** Write the destination data frame to the output file
-        # Include frac sec if frequency is < 1 sec
-        if resampleArg < to_offset('S'):
-            df_dest.to_csv(outFile, sep=args.destDelimiter,
-                           encoding=args.destEncoding,
-                           date_format ='%Y-%b-%d %H:%M:%S.%f')
-        else:
-            # no need for fractional sec
-            df_dest.to_csv(outFile, sep=args.destDelimiter,
+        try:
+            # **** Write the destination data frame to the output file
+            # Include frac sec if frequency is < 1 sec
+            if resampleArg < to_offset('S'):
+                df_dest.to_csv(outFile, sep=args.destDelimiter,
+                               encoding=args.destEncoding,
+                               date_format ='%Y-%b-%d %H:%M:%S.%f')
+            else:
+                # no need for fractional sec
+             df_dest.to_csv(outFile, sep=args.destDelimiter,
                            encoding=args.destEncoding,
                            date_format ='%Y-%b-%d %H:%M:%S')
-        #except:
-        #    print('\nError writing data to the file. Output file content is suspect.\n')
-        #    print('Error: ', sys.exc_info())
+        except:
+            print('\nError writing data to the file. Output file content is suspect.\n')
+            print('Error: ', sys.exc_info())
         outFile.close()
-    #       df_dest.to_csv(args.outputFileName, sep=args.destDelimiter,
-    #            encoding=args.destEncoding)
     else:
         print('No instrument data found. Nothing written\n')
 
@@ -1070,6 +1082,6 @@ else:
 
 #get end  processing time
 procEnd = datetime.now()
-print('Process end time: ' + procEnd.strftime('%m/%d/%Y %H:%M:%S'))
+print('\nProcess end time: ' + procEnd.strftime('%m/%d/%Y %H:%M:%S'))
 print('Duration: ' + str(procEnd - procStart))
 print('*** End Processing ***' + '\n')
