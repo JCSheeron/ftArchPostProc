@@ -964,7 +964,6 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     if resampleArg is None:
         resampleArg = freq
         
-    print('resampleArg:', resampleArg, 'dt:', type(resampleArg))
     # **** Create a daterange data frame to act as the master datetime range.
     # Use the above determined start, end, and frequency
     # The data will get left merged using this data frame for time
