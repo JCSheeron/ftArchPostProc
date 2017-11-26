@@ -95,16 +95,36 @@
  off the inclusion of an export control message.  The defaults to false, so a
  message is included unless this argument is specified.
 
- TODO: Move Timestamp Indexed data class (TsIdxData) to a module
- TODO: Better error handling.  Currently, error handling is minimal
+ TODO: Improved Error handling? Testing will tell if this is needed.
+
+ TODO: Decide how to handle CalcStats function:  What columns do we run stats
+       on when the names change due to resampling (downsampling)?
+       Force the value column always and always use this? 
+       Use the 1st (0th) column always? Something else?
+
+ TODO: Not parsing dump data correctly. Problem with 10ms freq?
+
 
  Imports:
 
+ system related
+ import sys
+
+ date and time stuff
  from datetime import datetime, time
+ from pandas.tseries.frequencies import to_offset
  from dateutil import parser as duparser
 
+ csv file stuff
+ import csv
+
+ arg parser
  import argparse
 
+ numerical manipulation libraries
  import numpy as np
  import pandas as pd
+
+ custom libraries
+ from TsIdxData import TsIdxData
 
