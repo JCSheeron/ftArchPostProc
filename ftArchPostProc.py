@@ -304,14 +304,12 @@ class TsIdxData(object):
             # and expose below as a property
             try:
                 inferFreq = pd.infer_freq(self._df.index)
-                print('Freq:', inferFreq)
                 if inferFreq is not None:
                     self._timeOffset = to_offset(inferFreq)
                 else:
                     self._timeOffset = None
             except:
                 self._timeOffset = None
-            print(self._timeOffset)
 
             # **** statistics
             self.CalcStats()
@@ -379,7 +377,7 @@ class TsIdxData(object):
         # Make sure the resample argument is valid
         if resampleArg is None:
             # no sample period specified, use 1 second
-            print(self._name + ': Invalid resample period specified. Using 1 Second.')
+            print(self._name + ': No resample period specified. Using 1 Second.')
             resampleTo = to_offset('S')
         else:
             try:
@@ -490,27 +488,27 @@ unchanged. Frequency is ' + str(self.timeOffset))
                 if displayValStat:
                     dfResample[self._yName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').first()
+                            label='right', closed='right').last()
 
                 if displayMinStat:
                     dfResample[minColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').min()
+                            label='right', closed='right').min()
 
                 if displayMaxStat:
                     dfResample[maxColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').max()
+                            label='right', closed='right').max()
 
                 if displayMeanStat:
                     dfResample[meanColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').mean()
+                            label='right', closed='right').mean()
 
                 if displayStdStat:
                     dfResample[stdColName] = \
                             self._df.iloc[:,0].resample(resampleTo,
-                            label='left', closed='left').std()
+                            label='right', closed='right').std()
                 # print a message
                 print(self.name + ': Downsampled from ' + str(self.timeOffset) + \
                      ' to ' + str(resampleTo))
@@ -828,8 +826,12 @@ else:
 
 # get the resample argument
 if args.resample is not None:
-    #resampleArg = str(args.resample) # use the string version
-    resampleArg = to_offset(args.resample) # use the offset version
+    # a resample arg was supplied.  Try to use it, or default to 1 sec.
+    try:
+        resampleArg = to_offset(args.resample) # use the offset version
+    except:
+        print('Invalid resample period specified. Using 1 second')
+        resampleArg = to_offset('S')
 else:
     # arg is none, so update the internal version
     resampleArg = None
@@ -958,6 +960,15 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     # force the start time to start on a whole number of msec. Fractional
     # values can cause issues with merging and resampling.
     startTime = startTime.floor('L')
+    # if resampling is going on, roll back to clean start point. This *should*
+    # make the date range being merged with compatible with the resampled data
+    # points -- resampling starts at the time offset "origin"
+    if resampleArg is not None:
+        print('ResampleArg:', resampleArg)
+        print('Start before rollback:', str(startTime))
+        #startTime = to_offset('T').rollback(startTime)
+        startTime = startTime.floor(resampleArg)
+        print('Start after rollback:', str(startTime))
 
     # **** Make sure the resampleArg is either the value specified or the
     # minimum of the instrument data frequencies if nothing was specified.
@@ -1028,6 +1039,8 @@ resample argument.')
         for inst in instData:
             # first, resample the instrument data if it needs to be
             inst.resample(resampleArg, stats)
+            print('resampled instrument')
+            print(inst._df)
             # Merge the instrument data with the master dataframe.
             # The forward direction means to take the first instrument value
             # that is on or after the master date range.
