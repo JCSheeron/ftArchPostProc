@@ -153,7 +153,22 @@ class TsIdxData(object):
             # follow on data analysis less problematic
             self._df.dropna(subset=[self._yName], inplace=True)
             # force the timestamp to be a datetime
-            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
+            # coerce option for errors is marking dates after midnight (next
+            # day) as NaT. Not sure why. Try it with raise, first, and you get
+            # all the values. Put it in a try block, just in case an error is
+            # raised.
+            try:
+                self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
+                                                errors='raise',
+                                                box = True, 
+                                                #format = "%m/%d/%Y %H:%M:$S.%f",
+                                                #unit = 'ms',
+                                                infer_datetime_format = True,
+                                                origin = 'unix')
+            except:
+                print('Problem converting some timestamps.  Rows are probably \
+missing')
+                self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 #format = "%m/%d/%Y %H:%M:$S.%f",
@@ -191,16 +206,44 @@ class TsIdxData(object):
             self._df= self._df.loc[self._startQuery : self._endQuery]
 
             # Get the inferred frequency of the index. Store this internally,
-            # and expose below as a property
+            # and expose below as a property.
+            # infer_freq seems to be unreliable. Try it, but if it comes up
+            # empty, try it manually
             try:
+                # try the inferred frequency
                 inferFreq = pd.infer_freq(self._df.index)
-                if inferFreq is not None:
-                    self._timeOffset = to_offset(inferFreq)
-                else:
-                    self._timeOffset = None
             except:
-                self._timeOffset = None
+                inferFreq = None
+            
+            # If that did not work, try to get it manually
+            if inferFreq is None or inferFreq == pd.Timedelta(0): 
+                print('Determining sampling frequency manually.')
+                # Use entries 2 and 3 if you can, just in case there is
+                # something strange in the beginning. Otherwise, use entries 0
+                # and 1, or give up, and use 1 second.
+                if len(self._df.index) >= 3:
+                    inferFreq = pd.Timedelta((self._df.index[2] - self._df.index[1]))
+                elif len(self._df.index) >= 2:
+                    inferFreq = pd.Timedelta((self._df.index[1] - self._df.index[0]))
+                else:
+                    print('Not enough data to determine the data frequency. Using 1 sec.')
+                    inferFreq = pd.Timedelta('1S')
 
+            # At this point, there is value for inferred frequency,
+            # but there may be repeated times due to sub-second times being
+            # truncated.  If this happens, the time delta will be 0. Deal
+            # with it by forcing 1 second
+            if inferFreq == pd.Timedelta(0):
+                print('Two rows have the same timestamp.  Assuming a \
+1 second data frequency.')
+                inferFreq = pd.Timedelta('1S')
+
+            
+            # Frequency is ready. Convert it and store it as a time offset.
+            self._timeOffset = to_offset(inferFreq)
+
+            # troubleshooting
+            # print(self._df)
             # **** statistics
             self.CalcStats()
 

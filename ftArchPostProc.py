@@ -442,6 +442,8 @@ freq= np.NaN
 if instData:
     # find the earliest and latest start/end times
     for inst in instData:
+        print('Inst Start TS:', inst.startTs)
+        print('Inst End TS:', inst.endTs)
         # get the earliest start time
         if not inst.data.empty and not pd.isna(inst.startTs) and pd.isna(startTime):
             # first valid time
@@ -465,8 +467,7 @@ if instData:
         elif not inst.data.empty and not pd.isna(inst.timeOffset) and not pd.isna(freq):
             # get min 
             freq = min(freq, inst.timeOffset)
-
-
+        
 # **** From here on, use the start and end not a time (NaT) check as a check to
 # see if there is any data
 if not pd.isna(startTime) and not pd.isna(endTime):
