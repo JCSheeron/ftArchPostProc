@@ -69,7 +69,7 @@ class TsIdxData(object):
                                             origin='unix')
                 except:
                     # not convertable ... invalid ... ignore
-                    print('Invalid start query. Ignoring.')
+                    print('WARNING: Invalid start query. Ignoring.')
                     self._startQuery = None
             else:
                 # no need to convert
@@ -100,7 +100,7 @@ class TsIdxData(object):
 
                 except:
                     # not convertable ... invalid ... ignore
-                    print('Invalid end query. Ignoring.')
+                    print('WARNING: Invalid end query. Ignoring.')
                     self._endQuery = None
             else:
                 # no need to convert. Update the member
@@ -166,7 +166,7 @@ class TsIdxData(object):
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
             except:
-                print('Problem converting some timestamps.  Rows are probably \
+                print('WARNING: Problem converting some timestamps.  Rows are probably \
 missing')
                 self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                 errors='coerce',
@@ -192,7 +192,7 @@ missing')
                 try:
                     self._df.query(queryStr, inplace = True)
                 except:
-                    print('Invalid query string. Ignoring the specified query.')
+                    print('WARNING: Invalid query string. Ignoring the specified query.')
 
             # Make sure the data is sorted by timestamp. Even if the data seems
             # sorted, this is sometimes needed or the merge will create a
@@ -206,8 +206,8 @@ missing')
             self._df= self._df.loc[self._startQuery : self._endQuery]
 
             # Get the inferred frequency of the index. Store this internally,
-            # and expose below as a property.
-            # infer_freq seems to be unreliable. Try it, but if it comes up
+            # and expose below as a property.  Sometimes the data has repeated
+            # timestamps, and infer_freq does not work.Try it, but if it comes up
             # empty, try it manually
             try:
                 # try the inferred frequency
@@ -215,18 +215,22 @@ missing')
             except:
                 inferFreq = None
             
-            # If that did not work, try to get it manually
+            # If that did not work, try to get it manually. When timestamps are
+            # repeated, it looks like the odd/even rows in that order are
+            # repeated.
             if inferFreq is None or inferFreq == pd.Timedelta(0): 
-                print('Determining sampling frequency manually.')
-                # Use entries 2 and 3 if you can, just in case there is
+                print('Determining sampling frequency manually. Data may have \
+repeated or corrupted timestamps.')
+                # Use 3 and 4 if possible, just in case there is
                 # something strange in the beginning. Otherwise, use entries 0
                 # and 1, or give up, and use 1 second.
-                if len(self._df.index) >= 3:
-                    inferFreq = pd.Timedelta((self._df.index[2] - self._df.index[1]))
+                if len(self._df.index) >= 4:
+                    inferFreq = pd.Timedelta((self._df.index[3] -
+                                              self._df.index[2]))
                 elif len(self._df.index) >= 2:
                     inferFreq = pd.Timedelta((self._df.index[1] - self._df.index[0]))
                 else:
-                    print('Not enough data to determine the data frequency. Using 1 sec.')
+                    print('WARNING: Not enough data to determine the data frequency. Using 1 sec.')
                     inferFreq = pd.Timedelta('1S')
 
             # At this point, there is value for inferred frequency,
@@ -234,13 +238,19 @@ missing')
             # truncated.  If this happens, the time delta will be 0. Deal
             # with it by forcing 1 second
             if inferFreq == pd.Timedelta(0):
-                print('Two rows have the same timestamp.  Assuming a \
+                print('WARNING: Two rows have the same timestamp.  Assuming a \
 1 second data frequency.')
                 inferFreq = pd.Timedelta('1S')
 
-            
+
             # Frequency is ready. Convert it and store it as a time offset.
             self._timeOffset = to_offset(inferFreq)
+
+            # Print interesting stuff as long as length > 0
+            if len(self._df.index) > 0:
+                print('    Start Time:', self._df.index[0])
+                print('    End Time:', self._df.index[-1])
+                print('    Frequency:', self._timeOffset)
 
             # troubleshooting
             # print(self._df)
@@ -319,13 +329,13 @@ missing')
         # Make sure the resample argument is valid
         if resampleArg is None:
             # no sample period specified, use 1 second
-            print(self._name + ': No resample period specified. Using 1 Second.')
+            print('WARNING: ' + self._name + ': No resample period specified. Using 1 Second.')
             resampleTo = to_offset('S')
         else:
             try:
                 resampleTo = to_offset(resampleArg)
             except:
-                print(self._name + ': Invalid resample period specified. Using 1 second.')
+                print('WARNING: ' + self._name + ': Invalid resample period specified. Using 1 second.')
                 resampleTo = to_offset('S')
 
         if resampleTo < self.timeOffset:
@@ -361,7 +371,7 @@ missing')
                 self.CalcStats()
                 return
             except:
-                print(self._name + ': Unable to resample data. Data \
+                print('WARNING: ' + self._name + ': Unable to resample data. Data \
 unchanged. Frequency is ' + str(self.timeOffset))
                 print('Error: ', sys.exc_info())
                 return
@@ -463,7 +473,7 @@ unchanged. Frequency is ' + str(self.timeOffset))
                 self.CalcStats()
                 return
             except:
-                print(self._name + ': Unable to resample data. Data \
+                print('WARNING: ' + self._name + ': Unable to resample data. Data \
 unchanged. Frequency is ' + str(self.timeOffset))
                 print('Error: ', sys.exc_info())
                 return

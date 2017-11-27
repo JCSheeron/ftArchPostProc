@@ -125,10 +125,6 @@ import pandas as pd
 # custom libraries
 from TsIdxData import TsIdxData
 
-print('*** Begin Processing ***')
-# get start processing time
-procStart = datetime.now()
-print('Process start time: ' + procStart.strftime('%m/%d/%Y %H:%M:%S') + '\n')
 
 # **** argument parsing
 # define the arguments
@@ -306,6 +302,13 @@ args = parser.parse_args()
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
 
+# Put the begin mark here, after the arg parsing, so argument problems are
+# reported first.
+print('*** Begin Processing ***')
+# get start processing time
+procStart = datetime.now()
+print('Process start time: ' + procStart.strftime('%m/%d/%Y %H:%M:%S'))
+
 # **** Convert the start and end times to datetimes if they are specified.
 # Use the dateutil.parser function to get input flexability, and then
 # convert to a pandas datetime for max compatibility
@@ -323,7 +326,7 @@ if args.startTime is not None:
                                   infer_datetime_format=True, origin='unix')
     except:
         # not convertable ... invalid ... ignore
-        print('Invalid start time. Ignoring.')
+        print('WARNING: Invalid start time. Ignoring.')
         startArg = None
 else:
     # arg is none, so update the internal version
@@ -351,7 +354,7 @@ if args.endTime is not None:
                                 origin='unix')
     except:
         # not convertable ... invalid ... ignore
-        print('Invalid end time. Ignoring.')
+        print('WARNING: Invalid end time. Ignoring.')
         endArg = None
     
 else:
@@ -364,7 +367,7 @@ if args.resample is not None:
     try:
         resampleArg = to_offset(args.resample) # use the offset version
     except:
-        print('Invalid resample period specified. Using 1 second')
+        print('WARNING: Invalid resample period specified. Using 1 second')
         resampleArg = to_offset('S')
 else:
     # arg is none, so update the internal version
@@ -379,7 +382,7 @@ try:
                         delim_whitespace=False, encoding=args.sourceEncoding,
                         header=0, skipinitialspace=True)
 except:
-    print('Error opening source file: "' + args.inputFileName + '". Check file \
+    print('ERROR opening source file: "' + args.inputFileName + '". Check file \
 name, file presence, and permissions.')
     quit()
 
@@ -410,7 +413,7 @@ if args.t and len(headerList) >= 2:
         instName = instName.replace(' ', '_')
         instName = instName.replace('-', '_')
         # print a message showing what we are processing
-        print('Processing ' + instName)
+        print('\nProcessing ' + instName)
         # generate timestamp and value field (column) names
         # include the instr name in the timestamp column label so it can be
         # identified standalone
@@ -442,8 +445,6 @@ freq= np.NaN
 if instData:
     # find the earliest and latest start/end times
     for inst in instData:
-        print('Inst Start TS:', inst.startTs)
-        print('Inst End TS:', inst.endTs)
         # get the earliest start time
         if not inst.data.empty and not pd.isna(inst.startTs) and pd.isna(startTime):
             # first valid time
@@ -508,7 +509,9 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     startTime = startTime.floor(resampleArg)
 
     # Print messages so we can see what is going to happen.
-    print('\nThe start time is:', startTime)
+    print('\nInitial processing of each instrument done. For the generated \
+dataset:')
+    print('The start time is:', startTime)
     print('The end time is:', endTime)
     print('The sampling frequency is:', resampleArg)
     print('Note that the start and end times are the earliest and latest found \
@@ -528,7 +531,7 @@ data unless the resampling option is used.\n')
                                                            endTime,
                                                            freq=resampleArg)})
     except:
-        print('Error: Problem with generated date/time range. Check the \
+        print('ERROR: Problem with generated date/time range. Check the \
 resample argument.')
         print('Error: ', sys.exc_info())
         quit()
@@ -550,7 +553,7 @@ resample argument.')
         try:
             outFile = open(args.outputFileName, 'w', encoding=args.destEncoding)
         except:
-            print('Error opening the output file. Nothing written.')
+            print('ERROR opening the output file. Nothing written.')
             quit()
 
         # generate the export compliance warning, unless explicitly omitted
@@ -608,14 +611,14 @@ resample argument.')
                            encoding=args.destEncoding,
                            date_format ='%Y-%b-%d %H:%M:%S')
         except:
-            print('\nError writing data to the file. Output file content is suspect.\n')
+            print('\nERROR writing data to the file. Output file content is suspect.\n')
             print('Error: ', sys.exc_info())
         outFile.close()
     else:
-        print('No instrument data found. Nothing written\n')
+        print('ERROR: No instrument data found. Nothing written\n')
 
 else:
-    print('No data found. Nothing written\n')
+    print('ERROR: No data found. Nothing written\n')
 
 #get end  processing time
 procEnd = datetime.now()
