@@ -69,7 +69,7 @@ class TsIdxData(object):
                                             origin='unix')
                 except:
                     # not convertable ... invalid ... ignore
-                    print('WARNING: Invalid start query. Ignoring.')
+                    print('    WARNING: Invalid start query. Ignoring.')
                     self._startQuery = None
             else:
                 # no need to convert
@@ -100,7 +100,7 @@ class TsIdxData(object):
 
                 except:
                     # not convertable ... invalid ... ignore
-                    print('WARNING: Invalid end query. Ignoring.')
+                    print('    WARNING: Invalid end query. Ignoring.')
                     self._endQuery = None
             else:
                 # no need to convert. Update the member
@@ -166,8 +166,8 @@ class TsIdxData(object):
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
             except:
-                print('WARNING: Problem converting some timestamps.  Rows are probably \
-missing')
+                print('    WARNING: Problem converting some timestamps. \
+Rows are probably missing')
                 self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                 errors='coerce',
                                                 box = True, 
@@ -192,7 +192,8 @@ missing')
                 try:
                     self._df.query(queryStr, inplace = True)
                 except:
-                    print('WARNING: Invalid query string. Ignoring the specified query.')
+                    print('    WARNING: Invalid query string. Ignoring the \
+specified query.')
 
             # Make sure the data is sorted by timestamp. Even if the data seems
             # sorted, this is sometimes needed or the merge will create a
@@ -219,8 +220,8 @@ missing')
             # repeated, it looks like the odd/even rows in that order are
             # repeated.
             if inferFreq is None or inferFreq == pd.Timedelta(0): 
-                print('Determining sampling frequency manually. Data may have \
-repeated or corrupted timestamps.')
+                print('    Determining sampling frequency manually. \
+Data may have repeated or corrupted timestamps.')
                 # Use 3 and 4 if possible, just in case there is
                 # something strange in the beginning. Otherwise, use entries 0
                 # and 1, or give up, and use 1 second.
@@ -230,7 +231,8 @@ repeated or corrupted timestamps.')
                 elif len(self._df.index) >= 2:
                     inferFreq = pd.Timedelta((self._df.index[1] - self._df.index[0]))
                 else:
-                    print('WARNING: Not enough data to determine the data frequency. Using 1 sec.')
+                    print('    WARNING: Not enough data to determine the \
+data frequency. Using 1 sec.')
                     inferFreq = pd.Timedelta('1S')
 
             # At this point, there is value for inferred frequency,
@@ -238,8 +240,8 @@ repeated or corrupted timestamps.')
             # truncated.  If this happens, the time delta will be 0. Deal
             # with it by forcing 1 second
             if inferFreq == pd.Timedelta(0):
-                print('WARNING: Two rows have the same timestamp.  Assuming a \
-1 second data frequency.')
+                print('    WARNING: Two rows have the same timestamp.\
+Assuming a 1 second data frequency.')
                 inferFreq = pd.Timedelta('1S')
 
 
@@ -329,13 +331,15 @@ repeated or corrupted timestamps.')
         # Make sure the resample argument is valid
         if resampleArg is None:
             # no sample period specified, use 1 second
-            print('WARNING: ' + self._name + ': No resample period specified. Using 1 Second.')
+            print('    WARNING: ' + self._name + ': No resample period \
+specified. Using 1 Second.')
             resampleTo = to_offset('S')
         else:
             try:
                 resampleTo = to_offset(resampleArg)
             except:
-                print('WARNING: ' + self._name + ': Invalid resample period specified. Using 1 second.')
+                print('    WARNING: ' + self._name + ': Invalid resample \
+period specified. Using 1 second.')
                 resampleTo = to_offset('S')
 
         if resampleTo < self.timeOffset:
@@ -360,8 +364,8 @@ repeated or corrupted timestamps.')
                 dfResample[self._yName] = \
                         self._df.iloc[:,0].resample(resampleTo).pad()
                 # print a message
-                print(self.name + ': Upsampled from ' + str(self.timeOffset) + \
-                     ' to ' + str(resampleTo))
+                print('    ' + self.name + ': Upsampled from ' \
+                    + str(self.timeOffset) + ' to ' + str(resampleTo))
                 # update the object frequency
                 self._timeOffset = resampleTo
                 # now overwrite the original dataframe with the resampled one
@@ -371,9 +375,9 @@ repeated or corrupted timestamps.')
                 self.CalcStats()
                 return
             except:
-                print('WARNING: ' + self._name + ': Unable to resample data. Data \
-unchanged. Frequency is ' + str(self.timeOffset))
-                print('Error: ', sys.exc_info())
+                print('    WARNING: ' + self._name + ': Unable to resample \
+data. Data unchanged. Frequency is ' + str(self.timeOffset))
+                print('    Error: ', sys.exc_info())
                 return
         elif resampleTo > self.timeOffset:
             # Data will be downsampled. We'll have more data than rows.
@@ -462,8 +466,8 @@ unchanged. Frequency is ' + str(self.timeOffset))
                             self._df.iloc[:,0].resample(resampleTo,
                             label='right', closed='right').std()
                 # print a message
-                print(self.name + ': Downsampled from ' + str(self.timeOffset) + \
-                     ' to ' + str(resampleTo))
+                print('    ' + self.name + ': Downsampled from ' + \
+                      str(self.timeOffset) + ' to ' + str(resampleTo))
                 # update the object frequency
                 self._timeOffset = resampleTo
                 # now overwrite the original dataframe with the resampled one
@@ -473,13 +477,13 @@ unchanged. Frequency is ' + str(self.timeOffset))
                 self.CalcStats()
                 return
             except:
-                print('WARNING: ' + self._name + ': Unable to resample data. Data \
-unchanged. Frequency is ' + str(self.timeOffset))
-                print('Error: ', sys.exc_info())
+                print('    WARNING: ' + self._name + ': Unable to resample \
+data. Data unchanged. Frequency is ' + str(self.timeOffset))
+                print('    Error: ', sys.exc_info())
                 return
         else:
             # resampling not needed. Specified freq matches data already
-            print(self.name + ': Resampling not needed. New frequency \
+            print('    ' + self.name + ': Resampling not needed. New frequency \
 matches data frequency. Data unchanged. Frequency is ' + str(self.timeOffset))
             return
            

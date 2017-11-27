@@ -304,10 +304,10 @@ args = parser.parse_args()
 
 # Put the begin mark here, after the arg parsing, so argument problems are
 # reported first.
-print('*** Begin Processing ***')
+print('**** Begin Processing ****')
 # get start processing time
 procStart = datetime.now()
-print('Process start time: ' + procStart.strftime('%m/%d/%Y %H:%M:%S'))
+print('    Process start time: ' + procStart.strftime('%m/%d/%Y %H:%M:%S'))
 
 # **** Convert the start and end times to datetimes if they are specified.
 # Use the dateutil.parser function to get input flexability, and then
@@ -509,15 +509,15 @@ if not pd.isna(startTime) and not pd.isna(endTime):
     startTime = startTime.floor(resampleArg)
 
     # Print messages so we can see what is going to happen.
-    print('\nInitial processing of each instrument done. For the generated \
+    print('\n**** Initial processing of each instrument done. For the generated \
 dataset:')
-    print('The start time is:', startTime)
-    print('The end time is:', endTime)
-    print('The sampling frequency is:', resampleArg)
-    print('Note that the start and end times are the earliest and latest found \
-in the data unless the start and/or end time options are used.')
-    print('Note that the sample frequency used it the highest found in the \
-data unless the resampling option is used.\n')
+    print('    The start time is:', startTime)
+    print('    The end time is:', endTime)
+    print('    The sampling frequency is:', resampleArg)
+    print('    Note that the start and end times are the earliest and latest \
+found in the data unless the start and/or end time options are used.')
+    print('    Note that the sample frequency used it the highest found in \
+the data unless the resampling option is used.\n')
 
     # **** Create a daterange data frame to act as the master datetime range.
     # Use the above determined start, end, and frequency
@@ -570,7 +570,7 @@ resample argument.')
 'civil and criminal penalties.\n\n']
 
             # write to the output file
-            print('Writing the output file\n')
+            print('**** Writing the output file\n')
             csv.register_dialect('csvDialect', escapechar=' ',
                                 lineterminator='\n', quoting=csv.QUOTE_NONE)
             csvWriter = csv.writer(outFile, dialect='csvDialect')
@@ -622,6 +622,6 @@ else:
 
 #get end  processing time
 procEnd = datetime.now()
-print('\nProcess end time: ' + procEnd.strftime('%m/%d/%Y %H:%M:%S'))
-print('Duration: ' + str(procEnd - procStart))
-print('*** End Processing ***' + '\n')
+print('\n**** End Processing ****')
+print('    Process end time: ' + procEnd.strftime('%m/%d/%Y %H:%M:%S'))
+print('    Duration: ' + str(procEnd - procStart) + '\n')
