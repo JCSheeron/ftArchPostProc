@@ -245,16 +245,24 @@ process value(s). For example, to filter out all values < 0 or > 100,\
 you want to keep everything else, so the filter string would be: \
 "val >= 0 and val <= 100".')
 parser.add_argument('-st', '--startTime', default=None, metavar='', \
-                    help='Specify a start time. Use the data if not specified.')
+                    help='Specify a start date and time. If a time and no \
+date is specified, the current date is used.  If a date and no time \
+is specified, midnight is used so the entire date is included.  If this \
+argument is not used, the start time is derived from the data, and the \
+earliest of all the data timestamps is used.')
 parser.add_argument('-et', '--endTime', default=None, metavar='', \
-                    help='Specify an end time. Use the data if not specified.')
+                    help='Specify a end date and time. If a time and no \
+date is specified, the current date is used.  If a date and no time \
+is specified, the moment before midnight (11:59:59.999) is used so the \
+entire date is included.  If this argument is not used, the end time is \
+derived from the data, and the latest of all the data timestamps is used.')
 parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample the data. This is usually \
  used to "downsample" data. For example, create an output file with 1 sample \
  per minute when given an input file with 1 sample per second. If a period \
  longer than the source data sample period is specified, then one value is \
  used to represent more than one row in the source file.  In this case, the \
- -stats option is used (see below) to specify what statistices are calculated \
+ -stats option is used (see below) to specify what statistics are calculated \
  for the rolled up values. \
  Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds, and are not \
  case sensitive. You can put an integer in front of the option to further \
@@ -347,11 +355,6 @@ if args.endTime is not None:
             endArg = endArg.replace(hour=23, minute=59, 
                                     second=59, microsecond=999999)
 
-        # convert to a pandas datetime for max compatibility
-        endArg = pd.to_datetime(endArg, errors='coerce',
-                                box=True,
-                                infer_datetime_format=True,
-                                origin='unix')
     except:
         # not convertable ... invalid ... ignore
         print('WARNING: Invalid end time. Ignoring.')
