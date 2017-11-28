@@ -403,9 +403,12 @@ stats = str(args.stats).lower()
 
 # **** Read the csv file into a data frame.  The first row is treated as the header
 try:
+    # use string as the data type for all columns to prevent automatic
+    # datatype detection. We don't know ahead of time how many columns are
+    # being read in, so we don't yet know the types.
     df_source = pd.read_csv(args.inputFileName, sep=args.sourceDelimiter,
                         delim_whitespace=False, encoding=args.sourceEncoding,
-                        header=0, skipinitialspace=True)
+                        header=0, dtype = str, skipinitialspace=True)
 except:
     print('ERROR opening source file: "' + args.inputFileName + '". Check file \
 name, file presence, and permissions.')
