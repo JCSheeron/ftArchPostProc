@@ -8,9 +8,6 @@ lib64
 pyvenv.cfg
 activate
 
-# ignore csv files
-*.csv
-
 # ignore the orig files created by vim
 *.orig
 

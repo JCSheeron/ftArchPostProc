@@ -63,7 +63,7 @@ class TsIdxData(object):
                     self._startQuery = duparser.parse(startQuery, fuzzy=True)
                     # convert to a pandas datetime for max compatibility
                     self._startQuery = pd.to_datetime(self._startQuery,
-                                            errors='coerce',
+                                            errors='raise',
                                             box=True,
                                             infer_datetime_format=True,
                                             origin='unix')
@@ -93,11 +93,11 @@ class TsIdxData(object):
                                                   second=59, microsecond=999999)
 
                     # convert to a pandas datetime for max compatibility
-                    self._endQuery = pd.to_datetime(self._endQuery, errors='coerce',
-                                            box=True,
-                                            infer_datetime_format=True,
-                                            origin='unix')
-
+                    self._endQuery = pd.to_datetime(self._endQuery,
+                                                    errors='raise',
+                                                    box=True,
+                                                    infer_datetime_format=True,
+                                                    origin='unix')
                 except:
                     # not convertable ... invalid ... ignore
                     print('    WARNING: Invalid end query. Ignoring.')
@@ -129,6 +129,7 @@ class TsIdxData(object):
                                                     errors='ignore')
 
             # force the timestamp to a datetime
+            # should not raise an error, as there is no data 
             self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                     errors='coerce')
             # set the timestamp as the index

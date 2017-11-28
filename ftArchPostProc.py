@@ -322,7 +322,7 @@ if args.startTime is not None:
     try:
         startArg = duparser.parse(args.startTime, fuzzy=True)
         # convert to a pandas datetime for max compatibility
-        startArg = pd.to_datetime(startArg, errors='coerce', box=True,
+        startArg = pd.to_datetime(startArg, errors='raise', box=True,
                                   infer_datetime_format=True, origin='unix')
     except:
         # not convertable ... invalid ... ignore
@@ -338,7 +338,7 @@ if args.endTime is not None:
     try:
         endArg = duparser.parse(args.endTime, fuzzy=True)
         # convert to a pandas datetime for max compatibility
-        endArg = pd.to_datetime(endArg, errors='coerce', box=True,
+        endArg = pd.to_datetime(endArg, errors='raise', box=True,
                                   infer_datetime_format=True, origin='unix')
 
         # assume the end time of midnight means end time info was not
