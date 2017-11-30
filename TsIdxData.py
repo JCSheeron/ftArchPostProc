@@ -15,10 +15,13 @@ from dateutil import parser as duparser
 import numpy as np
 import pandas as pd
 
+# TODO: Document the functionality and ctor params
+#
 # create a TimeStamp Indexed data class
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
-            valueQuery=None, startQuery=None, endQuery=None):
+            valueQuery=None, startQuery=None, endQuery=None,
+            sourceTimeFormat='%m/%d/%Y %I:%M:%S %p'):
         self._name = str(name) # use the string version
 
         # default x-axis (timestamp) label to 'timestamp' if nothing is specified
@@ -63,6 +66,7 @@ class TsIdxData(object):
                     self._startQuery = duparser.parse(startQuery, fuzzy=True)
                     # convert to a pandas datetime for max compatibility
                     self._startQuery = pd.to_datetime(self._startQuery,
+                                            #format='%m/%d/%Y %I:%M:%S %p',
                                             errors='raise',
                                             box=True,
                                             infer_datetime_format=True,
@@ -94,6 +98,7 @@ class TsIdxData(object):
 
                     # convert to a pandas datetime for max compatibility
                     self._endQuery = pd.to_datetime(self._endQuery,
+                                                    #format='%m/%d/%Y %I:%M:%S %p',
                                                     errors='raise',
                                                     box=True,
                                                     infer_datetime_format=True,
@@ -117,6 +122,9 @@ class TsIdxData(object):
                                         box=True,
                                         infer_datetime_format=True,
                                         origin='unix')
+
+        # make sure the source time format is a string
+        self._sourceTimeFormat = str(sourceTimeFormat)
 
         if df is None:
             # No source specified ...
@@ -162,18 +170,16 @@ class TsIdxData(object):
                 self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                 errors='raise',
                                                 box = True, 
-                                                #format = "%m/%d/%Y %H:%M:$S.%f",
-                                                #unit = 'ms',
-                                                infer_datetime_format = True,
+                                                format=self._sourceTimeFormat,
+                                                exact=False,
+                                                #infer_datetime_format = True,
                                                 origin = 'unix')
             except:
-                print('    WARNING: Problem converting some timestamps. \
-Rows are probably missing')
+                print('    WARNING: Problem converting some timestamps from \
+the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
                 self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
                                                 errors='coerce',
                                                 box = True, 
-                                                #format = "%m/%d/%Y %H:%M:$S.%f",
-                                                #unit = 'ms',
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
             # get rid of any NaN and NaT timestamps. These can be from the

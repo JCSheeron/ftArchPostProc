@@ -64,19 +64,25 @@
 # would be:
 # "val >= 0 and val <= 100".
 #
-# -st or -startTime (optional, default=None)
+# -st or --startTime (optional, default=None)
 # Specify a start date and time. If a time and no date is specified, the
 # current date is used.  If a date and no time is specified, midnight is
 # used so the entire date is included.  If this argument is not used, the 
 # start time is derived from the data, and the earliest of all the data
 # timestamps is used.
 
-# -et or -endTime (optional, default=None)
+# -et or --endTime (optional, default=None)
 # Specify an end date and time. If a time and no date is specified, the
 # current date is used.  If a date and no time is specified, the moment before
 # midnight (11:59:59.999) is used so the  entire date is included.  If this
 # argument is not used, the end time is derived from the data, and the latest
 # of all the data timestamps is used.
+#
+# -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %I:%M:%S %p")
+# Specify the format of the source data time format,
+# as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
+# year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M
+# minutes, %S seconds, %p AM/PM. The default string is "%m/%d/%Y %I:%M:%S %p".'
 #
 # -rs or --resample (optional, default=None) Resample the data. This is usually
 # used to "downsample" data. For example, create an output file with 1 sample
@@ -205,19 +211,25 @@ eplStr="""Final Test Archive Data Post Processing
  values < 0 or > 100,you want to keep everything else, so the filter string
  would be: "val >= 0 and val <= 100".
 
- -st or -startTime (optional, default=None)
+ -st or --startTime (optional, default=None)
  Specify a start date and time. If a time and no date is specified, the
  current date is used.  If a date and no time is specified, midnight is
  used so the entire date is included.  If this argument is not used, the 
  start time is derived from the data, and the earliest of all the data
  timestamps is used.
 
- -et or -endTime (optional, default=None)
+ -et or --endTime (optional, default=None)
  Specify an end date and time. If a time and no date is specified, the
  current date is used.  If a date and no time is specified, the moment before
  midnight (11:59:59.999) is used so the  entire date is included.  If this
  argument is not used, the end time is derived from the data, and the latest
  of all the data timestamps is used.
+
+ -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %I:%M:%S %p")
+ Specify the format of the source data time format,
+ as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
+ year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M
+ minutes, %S seconds, %p AM/PM. The default string is "%m/%d/%Y %I:%M:%S %p".
 
  -rs or --resample (optional, default=None) Resample the data. This is usually
  used to "downsample" data. For example, create an output file with 1 sample
@@ -273,11 +285,17 @@ is specified, midnight is used so the entire date is included.  If this \
 argument is not used, the start time is derived from the data, and the \
 earliest of all the data timestamps is used.')
 parser.add_argument('-et', '--endTime', default=None, metavar='', \
-                    help='Specify a end date and time. If a time and no \
+                    help='Specify an end date and time. If a time and no \
 date is specified, the current date is used.  If a date and no time \
 is specified, the moment before midnight (11:59:59.999) is used so the \
 entire date is included.  If this argument is not used, the end time is \
 derived from the data, and the latest of all the data timestamps is used.')
+parser.add_argument('-stf', '--sourceTimeFormat', \
+                    default='%m/%d/%Y %I:%M:%S %p', metavar='', \
+                    help='Specify the format of the source data time format, \
+as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit \
+year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M \
+minutes, %S seconds, %p AM/PM. The default string is "%m/%d/%Y %I:%M:%S %p".')
 parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample the data. This is usually \
  used to "downsample" data. For example, create an output file with 1 sample \
@@ -326,6 +344,7 @@ args = parser.parse_args()
 # args.valueQuery       string  Optional query of the data
 # args.startTime        string  Optional start date time
 # args.endTime          string  Options end date time
+# args.sourceTimeFormat string  Format string for source data timestamps
 # args.resample         string  Resample period. Default is 'S' or 1 sample/sec.
 # args.stats            string  Stats to calc. Value, min, max, ave, std dev.
 # args.noExportMsg      True/False Exclude export control message when set
@@ -401,6 +420,9 @@ else:
 # force the stats argument to a lower case string so they are case insensitive.
 stats = str(args.stats).lower()
 
+# make sure the source timestamp format argument is a string
+sourceTimeFormat = str(args.sourceTimeFormat)
+
 # **** Read the csv file into a data frame.  The first row is treated as the header
 try:
     # use string as the data type for all columns to prevent automatic
@@ -454,7 +476,8 @@ if args.t and len(headerList) >= 2:
         # Querying of value and filtering of timestamps will happen during
         # construction of the object
         instData.append(TsIdxData(instName, tsName, valName, iDframe,
-                                  args.valueQuery, startArg, endArg))
+                                  args.valueQuery, startArg, endArg,
+                                  sourceTimeFormat))
 
 elif args.a and len(headerList) >= 2:
     # archive data, and there are at least two (time/value pair) cols
