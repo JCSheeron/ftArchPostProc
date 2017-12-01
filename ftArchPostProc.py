@@ -112,11 +112,6 @@
 # 
 # TODO: Improved Error handling? Testing will tell if this is needed.
 #
-# TODO: Decide how to handle CalcStats function:  What columns do we run stats
-# on when the names change due to resampling (downsampling)? Force the value
-# column always and always use this? Use the 1st (0th) column always? Something
-# else?
-#
 # TODO: Include units. This does not come from the data export. One idea is to
 # use a JSON file to map tag name with units.  Additionally, a JSON file may be
 # used in the archive data (-a option) file to map tag name with ID number. If 
