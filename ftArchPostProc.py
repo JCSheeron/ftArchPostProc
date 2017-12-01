@@ -293,9 +293,10 @@ derived from the data, and the latest of all the data timestamps is used.')
 parser.add_argument('-stf', '--sourceTimeFormat', \
                     default='%m/%d/%Y %I:%M:%S %p', metavar='', \
                     help='Specify the format of the source data time format, \
-as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit \
-year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M \
-minutes, %S seconds, %p AM/PM. The default string is "%m/%d/%Y %I:%M:%S %p".')
+as a string. Use the following placeholders:%%m minutes, %%d days, %%Y 4 digit \
+year, %%y two digit year, %%H hours (24hr format) %%I hours (12 hr format), %%M \
+minutes, %%S seconds, %%p AM/PM. The default string is "%%m/%%d/%%Y %%I:%%M:%%S \
+%%p".')
 parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample the data. This is usually \
  used to "downsample" data. For example, create an output file with 1 sample \
@@ -433,7 +434,8 @@ try:
                         header=0, dtype = str, skipinitialspace=True)
 except:
     print('ERROR opening source file: "' + args.inputFileName + '". Check file \
-name, file presence, and permissions.')
+name, file presence, and permissions. Unexpected encoding can also cause this \
+error.')
     quit()
 
 # put source the headers into a list
@@ -450,6 +452,11 @@ if args.t and len(headerList) >= 2:
     # In the historical trend case, loop thru every other column to get to the 
     # time stamp columns. The instrument name can be derrived from this and the 
     # values can be obtained from a relative (+1) index from the timestamp
+    print('\nHistorical Trend Data Specified. The source data is expected to \
+have the following format:\n \
+    Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ... \n\
+and the timestamps may or may not be synchronized.')
+
     for idx in range(0, len(headerList), 2):
         # For each header entry, make instrument and timestamp column names.
         # Even indexes are timestamps, odd indexes are values.
@@ -482,7 +489,11 @@ if args.t and len(headerList) >= 2:
 elif args.a and len(headerList) >= 2:
     # archive data, and there are at least two (time/value pair) cols
     # TODO: archive data case
-    pass
+    print('\nArchive data file specified. The data is expected to be formatted as \
+follows:\n    ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags\n \
+and there are normally multiple valueIDs each at multiple timestamps. \n\n \
+Support for this format is not yet implemented.\n')
+    quit()
 
 # **** Determine the earliest start time, the latest end time, and the minimum
 # frequency for the instruments. These will be used to generate the master time

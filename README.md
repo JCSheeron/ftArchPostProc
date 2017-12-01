@@ -63,19 +63,25 @@
  would be:
  "val >= 0 and val <= 100".
 
- -st or -startTime (optional, default=None)
+ -st or --startTime (optional, default=None)
  Specify a start date and time. If a time and no date is specified, the
  current date is used.  If a date and no time is specified, midnight is
  used so the entire date is included.  If this argument is not used, the 
  start time is derived from the data, and the earliest of all the data
  timestamps is used.
 
- -et or -endTime (optional, default=None)
+ -et or --endTime (optional, default=None)
  Specify an end date and time. If a time and no date is specified, the
  current date is used.  If a date and no time is specified, the moment before
  midnight (11:59:59.999) is used so the  entire date is included.  If this
  argument is not used, the end time is derived from the data, and the latest
  of all the data timestamps is used.
+
+ -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %I:%M:%S %p")
+ Specify the format of the source data time format,
+ as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
+ year, %y two digit year, %H hours (24hr format), %I hours (12 hr format), %M
+ minutes, %S seconds, %p AM/PM. The default string is "%m/%d/%Y %I:%M:%S %p".'
 
  -rs or --resample (optional, default=None) Resample the data. This is usually
  used to "downsample" data. For example, create an output file with 1 sample
@@ -115,6 +121,8 @@
  used in the archive data (-a option) file to map tag name with ID number. If 
  this is the case, then the same JSON file could be used by both the -t and
  -a options.
+
+ TODO: Update TsIdxData.py class general/explanation comments
 
 
  Imports:
