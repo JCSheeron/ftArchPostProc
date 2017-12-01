@@ -39,7 +39,7 @@ class TsIdxData(object):
         # Keep the column (header) names as a property
         self._columns = [self._tsName, self._yName]
 
-        # Default the filter sentinel to empty if not specified. 
+        # Default the value query to empty if not specified. 
         if valueQuery is None:
             self._vq = ''
         else:
@@ -145,9 +145,6 @@ class TsIdxData(object):
 
             # set the other properties
             self._timeOffset = np.NaN
-
-            # **** statistics -- set to 0
-            self.ClearStats()
         else:
             # Source data is specified ...
             # Capture the source data
@@ -247,10 +244,9 @@ data frequency. Using 1 sec.')
             # truncated.  If this happens, the time delta will be 0. Deal
             # with it by forcing 1 second
             if inferFreq == pd.Timedelta(0):
-                print('    WARNING: Two rows have the same timestamp.\
+                print('    WARNING: Two rows have the same timestamp. \
 Assuming a 1 second data frequency.')
                 inferFreq = pd.Timedelta('1S')
-
 
             # Frequency is ready. Convert it and store it as a time offset.
             self._timeOffset = to_offset(inferFreq)
@@ -261,60 +257,19 @@ Assuming a 1 second data frequency.')
                 print('    End Time:', self._df.index[-1])
                 print('    Frequency:', self._timeOffset)
 
-            # troubleshooting
-            # print(self._df)
-            # **** statistics
-            self.CalcStats()
-
     def __repr__(self):
-        colList= list(self._df.columns.values)
-        outputMsg=  '{:8} {}'.format('Name: ', self._name + '\n')
-        outputMsg+= '{:8} {:18} {:10} {}'.format('Index: ', self._df.index.name, \
+        outputMsg=  '{:13} {}'.format('Name: ', self.name + '\n')
+        outputMsg+= '{:13} {:18} {:10} {}'.format('Index: ', self._df.index.name, \
 'datatype: ', str(self._df.index.dtype) + '\n')
-        outputMsg+= '{:8} {:18} {:10} {}'.format('Y axis: ', str(colList[0]), \
-'datatype: ', str(self._df[colList[0]].dtype) + '\n')
-        outputMsg+= '{:15} {}'.format('Value Query: ', self._vq + '\n')
-        outputMsg+= '{:15} {}'.format('Start Time: ', str(self._startTs) + '\n')
-        outputMsg+= '{:15} {}'.format('End Time: ', str(self._endTs) + '\n')
-        outputMsg+= '{:15} {}'.format('Sample Period: ', str(self._timeOffset) + '\n')
-        """
-        outputMsg+= '{:15} {}'.format('Value Count: ', str(self._count) + '\n')
-        outputMsg+= '{:15} {}'.format('Min Value: ', str(self._min) + '\n')
-        outputMsg+= '{:15} {}'.format('Max Value: ', str(self._max) + '\n')
-        outputMsg+= '{:15} {}'.format('Median Value: ', str(self._median) + '\n')
-        outputMsg+= '{:15} {}'.format('Mean Value: ', str(self._mean) + '\n\n')
-        """
-        outputMsg+= str(self._df) + '\n'
+        outputMsg+= 'Columns:\n'
+        for col in self.columns:
+            outputMsg+= '{:4} {:15} {} {}'.format(' ', col, self.columns[col], '\n')
+        outputMsg+= '{:13} {}'.format('Value Query: ', self.valueQuery + '\n')
+        outputMsg+= '{:13} {}'.format('Start Time: ', str(self.startTs) + '\n')
+        outputMsg+= '{:13} {}'.format('End Time: ', str(self.endTs) + '\n')
+        outputMsg+= '{:13} {}'.format('Period: ', str(self.timeOffset) + '\n')
+        outputMsg+= '{:13} {}'.format('Length: ', str(self.count) + '\n')
         return(outputMsg)
-
-    def CalcStats(self):
-        # get the start and end timestamps
-        self._startTs = self._df.index.min()
-        self._endTs = self._df.index.max()
-        """
-        # get the count, min, max, mean, median values
-        self._count = self._df[self._yName].count()
-        self._min = self._df[self._yName].min()
-        self._max = self._df[self._yName].max()
-        self._median = self._df[self._yName].median()
-        self._mean = self._df[self._yName].mean()
-        self._stdDev = self._df[self._yName].std()
-        """
-        return
-
-    def ClearStats(self):
-        # Set the start and end timestamps to nothing
-        self._startTs = pd.NaT
-        self._endTs = pd.NaT
-
-        # clear the count, min, max, median, mean
-        self._count = 0
-        self._min = 0
-        self._max = 0
-        self._median = 0
-        self._mean = 0
-        self._stdDev = 0
-        return
 
     def resample(self, resampleArg='S', stats='m'):
         # Resample the data from the complete dataframe.
@@ -379,7 +334,6 @@ period specified. Using 1 second.')
                 # and delete the resampled one
                 self._df = dfResample
                 del dfResample
-                self.CalcStats()
                 return
             except:
                 print('    WARNING: ' + self._name + ': Unable to resample \
@@ -400,10 +354,12 @@ data. Data unchanged. Frequency is ' + str(self.timeOffset))
             # Determine the stat flags. These are used below to decide which
             # columns to make and calculate. Display the stat if the representative
             # character is in the stats argument. Find returns -1 if not found
-            displayValStat = stats.find('v') > -1
-            displayMinStat = stats.find('i') > -1
-            displayMaxStat = stats.find('x') > -1
+            displayValStat = stats.find('v') > -1   # value
+            displayMinStat = stats.find('i') > -1   # minimum
+            displayMaxStat = stats.find('x') > -1   # maximum
+            # mean or average
             displayMeanStat = stats.find('m') > -1 or stats.find('a') > -1
+            # standard deviation
             displayStdStat = stats.find('s') > -1 or stats.find('d') > -1
             # If none of the flags are set, an invalid string must have been
             # passed. Display just the mean, and set the stats string accordingly
@@ -481,7 +437,6 @@ data. Data unchanged. Frequency is ' + str(self.timeOffset))
                 # and delete the resampled one
                 self._df = dfResample
                 del dfResample
-                self.CalcStats()
                 return
             except:
                 print('    WARNING: ' + self._name + ': Unable to resample \
@@ -504,16 +459,15 @@ matches data frequency. Data unchanged. Frequency is ' + str(self.timeOffset))
         return self._tsName
            
     @property
-    def yName(self):
-        return self._yName
-
-    @property
-    def queryString(self):
-        return self._qs
+    def valueQuery(self):
+        return self._vq
 
     @property
     def columns(self):
-        return self._df.columns.values.tolist()
+        # this dictionary will include column names as the key and the data
+        # type as a value
+        # {col name : datatype, ...}
+        return dict(self._df.dtypes)
 
     @property
     def data(self):
@@ -525,33 +479,15 @@ matches data frequency. Data unchanged. Frequency is ' + str(self.timeOffset))
 
     @property
     def startTs(self):
-        return self._startTs
+        # assumes index is sorted and start is at the top
+        return self._df.index[0]
 
     @property
     def endTs(self):
-        return self._endTs
+        # assumes index is sorted and end is at the bottom
+        return self._df.index[-1]
 
     @property
     def count(self):
-        return self._count
-
-    @property
-    def min(self):
-        return self._min
-
-    @property
-    def max(self):
-        return self._max
-
-    @property
-    def median(self):
-        return self._median
-
-    @property
-    def mean(self):
-        return self._mean
-
-    @property
-    def stdDev(self):
-        return self._std
+        return len(self._df.index)
 
