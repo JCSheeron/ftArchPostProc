@@ -13,9 +13,12 @@
 #
 # In the case of a archive export file (the -a command line argument), the data
 # columns are as follows:
-# ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags
-# and there are normally multiple valueIDs each at multiple timestamps.
-# Note: The -h and -a options are mutually exclusive, and one or the other must
+# ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
+# Where ValueId is unique across the table.  TagId is unique for a given tag.
+# Normally there are multiple TagIds each at multiple timestamps. Timestamps are
+# not necessarily synchronized.
+#
+# Note: The -t and -a options are mutually exclusive, and one or the other must
 # be specified. 
 #
 # Given an input file, the program will produce a *.csv file with the name
@@ -32,9 +35,10 @@
 # encoding is "utf-16". If another encoding needs to be specified, it can be
 # done using the -se, -sourceEncoding, -de, or -destEncoding options.
 #
-# It is assumed that the first row is a header. Tag names are derrived from the
-# first row cell contents.
-# 
+# It is assumed that the first row is a header. In the case of a historical
+# trend input file (-t option), the tag names are derrived from the header.
+# In the case of a archive data input file (-a option), the tag names are 
+# pulled from the data.
 #
 # Command line arguments are:
 # inputFileName (required, positional). The source data csv file.
@@ -44,7 +48,7 @@
 # -t, (required and mutually exclusive with -a).  Input file
 # is a historical trend export file.
 #
-# -a (required and mutually exclusive with -h). Input file is a
+# -a (required and mutually exclusive with -t). Input file is a
 # archive export file.  
 #
 # -se or --sourceEncoding (optional, default of "utf-16"). Source file encoding.
@@ -82,7 +86,8 @@
 # Specify the format of the source data time format,
 # as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
 # year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M
-# minutes, %S seconds, %p AM/PM. The default string is "%m/%d/%Y %I:%M:%S %p".'
+# minutes, %S seconds, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
+# The default string is "%m/%d/%Y %I:%M:%S %p".'
 #
 # -rs or --resample (optional, default=None) Resample the data. This is usually
 # used to "downsample" data. For example, create an output file with 1 sample
@@ -156,9 +161,12 @@ eplStr="""Final Test Archive Data Post Processing
 
  In the case of a archive export file (the -a command line argument), the data
  columns are as follows:
- ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags
- and there are normally multiple valueIDs each at multiple timestamps.
- Note: The -h and -a options are mutually exclusive, and one or the other must
+ ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
+ Where ValueId is unique across the table.  TagId is unique for a given tag.
+ Normally there are multiple TagIds each at multiple timestamps. Timestamps are
+ not necessarily synchronized.
+
+ Note: The -t and -a options are mutually exclusive, and one or the other must
  be specified. 
 
  Given an input file, the program will produce a *.csv file with the name
@@ -175,8 +183,10 @@ eplStr="""Final Test Archive Data Post Processing
  encoding is "utf-16". If another encoding needs to be specified, it can be
  done using the -se, -sourceEncoding, -de, or -destEncoding options.
 
- It is assumed that the first row is a header. Tag names are derrived from the
- first row cell contents.
+ It is assumed that the first row is a header. In the case of a historical
+ trend input file (-t option), the tag names are derrived from the header.
+ In the case of a archive data input file (-a option), the tag names are 
+ pulled from the data.
  
 
  Command line arguments are:
@@ -187,7 +197,7 @@ eplStr="""Final Test Archive Data Post Processing
  -t, (required and mutually exclusive with -a).  Input file
  is a historical trend export file.
 
- -a (required and mutually exclusive with -h). Input file is a
+ -a (required and mutually exclusive with -t). Input file is a
  archive export file.  
 
  -se or --sourceEncoding (optional, default of "utf-16"). Source file encoding.
@@ -224,7 +234,8 @@ eplStr="""Final Test Archive Data Post Processing
  Specify the format of the source data time format,
  as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
  year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M
- minutes, %S seconds, %p AM/PM. The default string is "%m/%d/%Y %I:%M:%S %p".
+ minutes, %S seconds, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
+ The default string is "%m/%d/%Y %I:%M:%S %p".
 
  -rs or --resample (optional, default=None) Resample the data. This is usually
  used to "downsample" data. For example, create an output file with 1 sample
@@ -255,8 +266,7 @@ eplStr="""Final Test Archive Data Post Processing
 
 descrStr="Post Processing of historical trend or archive data files."
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, \
-                                 description=descrStr,
-                                 epilog=eplStr)
+                                 description=descrStr, epilog=eplStr)
 parser.add_argument('inputFileName', help='Input data file (csv)')
 parser.add_argument('outputFileName', help= 'Output data file (csv)')
 parser.add_argument('-sd', '--sourceDelimiter', default=',', metavar='', \
@@ -290,8 +300,8 @@ parser.add_argument('-stf', '--sourceTimeFormat', \
                     help='Specify the format of the source data time format, \
 as a string. Use the following placeholders:%%m minutes, %%d days, %%Y 4 digit \
 year, %%y two digit year, %%H hours (24hr format) %%I hours (12 hr format), %%M \
-minutes, %%S seconds, %%p AM/PM. The default string is "%%m/%%d/%%Y %%I:%%M:%%S \
-%%p".')
+minutes, %%S seconds, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
+The default string is "%%m/%%d/%%Y %%I:%%M:%%S %%p".')
 parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample the data. This is usually \
  used to "downsample" data. For example, create an output file with 1 sample \
@@ -440,7 +450,7 @@ instData = []
 
 # ****Iterate thru the header list.
 # Create desired column names: value_<instName> and timestamp_<instName>
-# Create a instrument data object witpythonh data sliced from the big data frame
+# Create a instrument data object with data sliced from the big data frame
 # look at the -t or -a argument to know what format the data is in 
 if args.t and len(headerList) >= 2:
     # historical trend data, and there are at least two (time/value pair) cols
@@ -464,30 +474,157 @@ and the timestamps may or may not be synchronized.')
         # replace the spaces and hyphens with underscores
         instName = instName.replace(' ', '_')
         instName = instName.replace('-', '_')
+        # Generate timestamp and value field (column) names.
+        # These will be used for the exported data.
+        # Include the instr name in the timestamp column label so it can be
+        # identified standalone
+        tsName = 'timestamp_' + instName
+        valName = 'value_' + instName
         # print a message showing what we are processing
+        print('\nProcessing ' + instName)
+        # create a new dataframe for the instrument and use the above column names
+        df_valData = pd.DataFrame(data=df_source.iloc[:,[idx,idx+1]])
+        df_valData.columns = [tsName, valName]
+        # change the data types of the timestamp and value columns if needed
+        # value data needs to be float
+        if 'float64' != df_valData[valName].dtype:
+            # not a float, but it should be. Change the type
+            df_valData[valName] = df_valData[valName].astype('float',errors='ignore')
+        # timestamp needs to be a date time
+        if 'datetime64[ns]' != df_valData[tsName].dtype:
+            # For changing to timestamps, coerce option for errors is marking
+            # dates after midnight (next day) as NaT.
+            # Not sure why. Try it with raise, first, and you get
+            # all the values. Put it in a try block, just in case an error is
+            # raised.
+            try:
+                df_valData[tsName] = pd.to_datetime(df_valData[tsName],
+                                                errors='raise',
+                                                box = True, 
+                                                format=sourceTimeFormat,
+                                                exact=False,
+                                                #infer_datetime_format = True,
+                                                origin = 'unix')
+            except:
+                print('    WARNING: Problem converting some timestamps from \
+the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+                df_valData[tsName] = pd.to_datetime(df_valData[tsName],
+                                                errors='coerce',
+                                                box = True, 
+                                                infer_datetime_format = True,
+                                                origin = 'unix')
+        # set the timestamp column to be the index
+        df_valData.set_index(tsName, inplace=True)
+        # sort the index for possible better performance later
+        df_valData.sort_index(inplace=True)
+
+        # make an object with the instrument name, labels and data frame
+        # instrument data object, and append it to the list.
+        # Querying of value and filtering of timestamps will happen during
+        # construction of the object
+        instData.append(TsIdxData(instName, tsName, valName, df_valData,
+                                  args.valueQuery, startArg, endArg,
+                                  sourceTimeFormat))
+        quit()
+    # The data is now in instData in data frames. Ddone with the source data. Delete it.
+    del df_source
+
+elif args.a and len(headerList) >= 2:
+    # archive data, and there are at least two (time/value pair) cols
+    # TODO: archive data case
+    print('\nArchive data file specified. The data is expected to be formatted as \
+follows:\n    ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value\n \
+Where ValueId is unique across the table.  TagId is unique for a given tag. \n \
+Normally there are multiple TagIds each at multiple timestamps. Timestamps are \
+not necessarily synchronized.\n')
+    # From the source data, create a data frame with just the
+    # tag id, tag name, time stamp, value
+    # where the tag id and time stamp is a multi-index
+    df_valData = df_source.drop(columns=[headerList[0],headerList[4],headerList[5]],
+                                inplace=False,errors='ignore')
+    # So sorting works as expected, before setting the indexes,
+    # set the tag id to an int, the timestamp to a timestamp, and the value to a float
+    df_valData[headerList[1]] = df_valData[headerList[1]].astype('int',errors='ignore')
+    df_valData[headerList[6]] = df_valData[headerList[6]].astype('float',errors='ignore')
+    # force the timestamp to be a datetime
+    # coerce option for errors is marking dates after midnight (next
+    # day) as NaT. Not sure why. Try it with raise, first, and you get
+    # all the values. Put it in a try block, just in case an error is
+    # raised.
+    try:
+        df_valData[headerList[3]] = pd.to_datetime(df_valData[headerList[3]],
+                                                   errors='raise',
+                                                   box = True, 
+                                                   format=sourceTimeFormat,
+                                                   exact=False,
+                                                   #infer_datetime_format = True,
+                                                   origin = 'unix')
+    except:
+        print('    WARNING: Problem converting some timestamps from \
+the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+        df_valData[headerList[3]] = pd.to_datetime(df_valData[headerList[3]],
+                                                   errors='coerce',
+                                                   box = True, 
+                                                   infer_datetime_format = True,
+                                                   origin = 'unix')
+
+    # now set the index to a multi-index of TagId,Timestamp
+    df_valData.set_index([headerList[1],headerList[3]], inplace=True)
+    # sort the index for possible better performance later
+    df_valData.sort_index(inplace=True)
+
+    # Create a dataframe to hold a unique list of tag ids and tag names.
+    df_tagList = df_source.drop(columns=[headerList[0],headerList[3],headerList[4],
+                                         headerList[5],headerList[6]],
+                                inplace=False, errors='ignore')
+    # force the id column datatype to an int
+    df_tagList[headerList[1]] = df_tagList[headerList[1]].astype('int',errors='ignore')
+    # Drop the duplicate ids
+    df_tagList.drop_duplicates(subset=headerList[1], keep='first', inplace=True)
+    # Set the index to the tagId
+    df_tagList.set_index(headerList[1], inplace=True)
+    # sort the index for possible better performance later
+    df_tagList.sort_index(inplace=True)
+
+    # done with the source data. Delete it.
+    del df_source
+
+    # Now we have a sorted list of tags and a dataframe full of values.
+    # Go thru the tag list and make an intrument for each tag with the data.
+    # The TsIdxData object is used for each instruments data.
+    for trow in df_tagList.itertuples(index=True, name=None):
+        # itertuples will return a tuple (id, tagname) for a row
+        # For tag, get the id and the name.
+        # rpartition returns a tuple: first, separator, last. Use the first 
+        # member as the tag name -- this allows tag names with spaces to be
+        # preserved
+        instId = trow[0]
+        instName = trow[1]
+        # replace the spaces and hyphens with underscores
+        instName = instName.replace(' ', '_')
+        instName = instName.replace('-', '_')
+        #print a message showing what we are processing
         print('\nProcessing ' + instName)
         # generate timestamp and value field (column) names
         # include the instr name in the timestamp column label so it can be
         # identified standalone
         tsName = 'timestamp_' + instName
         valName = 'value_' + instName
-        # create a new dataframe for the instrument
-        iDframe = pd.DataFrame(df_source.iloc[:,[idx,idx+1]]) 
+        # create a new dataframe for the instrument. Use the id index to get
+        # all the timestamped values for the current id. No need for the
+        # tag name (it is the same for every row, and captured above, so leave
+        # it out.
+        df_valData = pd.DataFrame(df_valData.loc[(instId, ), 'Value':]) 
+        print(df_valData)
         # make an object with the instrument name, labels and data frame
         # instrument data object, and append it to the list.
         # Querying of value and filtering of timestamps will happen during
         # construction of the object
-        instData.append(TsIdxData(instName, tsName, valName, iDframe,
+        instData.append(TsIdxData(instName, tsName, valName, df_valData,
                                   args.valueQuery, startArg, endArg,
                                   sourceTimeFormat))
-
-elif args.a and len(headerList) >= 2:
-    # archive data, and there are at least two (time/value pair) cols
-    # TODO: archive data case
-    print('\nArchive data file specified. The data is expected to be formatted as \
-follows:\n    ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags\n \
-and there are normally multiple valueIDs each at multiple timestamps. \n\n \
-Support for this format is not yet implemented.\n')
+        #print(instData)
+        quit()
     quit()
 
 # **** Determine the earliest start time, the latest end time, and the minimum

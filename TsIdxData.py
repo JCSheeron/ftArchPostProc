@@ -148,46 +148,78 @@ class TsIdxData(object):
         else:
             # Source data is specified ...
             # Capture the source data
-            # set the data frame with the specified data frame
             self._df = pd.DataFrame(data=df)
+            # use the specified names for the column names
             self._df.columns=[self._tsName, self._yName]
-            # force the value column to a float
-            self._df[self._yName] = self._df[self._yName].astype('float',
-                                                    errors='ignore')
+            # change the value column to a float if needed
+            if 'float64' != self._df[self._yName].dtype:
+                self._df[self._yName] = self._df[self._yName].astype('float',
+                                                                    errors='ignore')
             # get rid of Nan from the values (y-axis)
             # not strictly necessary, but lack of NaN values tends to make
             # follow on data analysis less problematic
             self._df.dropna(subset=[self._yName], inplace=True)
-            # force the timestamp to be a datetime
-            # coerce option for errors is marking dates after midnight (next
-            # day) as NaT. Not sure why. Try it with raise, first, and you get
-            # all the values. Put it in a try block, just in case an error is
-            # raised.
-            try:
-                self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
-                                                errors='raise',
-                                                box = True, 
-                                                format=self._sourceTimeFormat,
-                                                exact=False,
-                                                #infer_datetime_format = True,
-                                                origin = 'unix')
-            except:
-                print('    WARNING: Problem converting some timestamps from \
+            
+            # If the index name is set to the tsName, and the index data type 
+            # is datetime, then the index is all set up. Otherwise make it so...
+            if self._tsName != self._df.index.name or 'datetime64[ns]' != self._df.index.dtype:
+                # The name and/or datatype of the index is not as needed.
+                # Reset and redo the index, changing the datatype if needed.
+                self._df.reset_index(inplace=True)
+                if 'datetime64[ns]' != self._df[self._tsName].dtype:
+                    # For changing to timestamps, coerce option for errors is marking
+                    # dates after midnight (next day) as NaT.
+                    # Not sure why. Try it with raise, first, and you get
+                    # all the values. Put it in a try block, just in case an error is
+                    # raised.
+                    try:
+                        self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
+                                                                errors='raise',
+                                                                box = True, 
+                                                                format=self._sourceTimeFormat,
+                                                                exact=False,
+                                                                #infer_datetime_format = True,
+                                                                origin = 'unix')
+                    except:
+                        print('    WARNING: Problem converting some timestamps from \
 the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
-                self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
-                                                errors='coerce',
-                                                box = True, 
-                                                infer_datetime_format = True,
-                                                origin = 'unix')
+                        self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
+                                                                errors='coerce',
+                                                                box = True, 
+                                                                infer_datetime_format = True,
+                                                                origin = 'unix')
+                # Condition the data before creating the index
+                # get rid of any NaN and NaT timestamps. These can be from the
+                # original data or from invalid conversions to datetime
+                self._df.dropna(subset=[self._tsName], inplace=True)
+                # round the timestamp to the nearest ms. Unseen ns and
+                # fractional ms values are not always displayed, and can cause
+                # unexpected merge and up/downsample results
+                self._df[self._tsName] = self._df[self._tsName].dt.round('L')
+                # get rid of any duplicate timestamps as a result of rounding
+                self._df[self._tsName].drop_duplicates(subset=self._tsName,
+                                                       keep='last', inplace=True)
+                # now the data type is correct, and forseen data errors are removed.
+                # Set the index to the timestamp column
+                self._df.set_index(self._tsName, inplace=True)
+                
+            # Condition the data. This was done before the index was made in the case
+            # the index was re-created, but do it here so data that was already indexed
+            # is conditioned.
             # get rid of any NaN and NaT timestamps. These can be from the
             # original data or from invalid conversions to datetime
             self._df.dropna(subset=[self._tsName], inplace=True)
-
             # round the timestamp to the nearest ms. Unseen ns and
             # fractional ms values are not always displayed, and can cause
             # unexpected merge and up/downsample results
             self._df[self._tsName] = self._df[self._tsName].dt.round('L')
+            # get rid of any duplicate timestamps as a result of rounding
+            self._df[self._tsName].drop_duplicates(subset=self._tsName,
+                                                   keep='last', inplace=True)
 
+            # Make sure the index is sorted possible better performance later
+            self._df.sort_index(inplace=True)
+            
             # Apply the query string if one is specified.
             # Replace "val" with the column name.
             if self._vq != '':
@@ -198,13 +230,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
                 except:
                     print('    WARNING: Invalid query string. Ignoring the \
 specified query.')
-
-            # Make sure the data is sorted by timestamp. Even if the data seems
-            # sorted, this is sometimes needed or the merge will create a
-            # bunch of unexpected (erronous) NaN values.
-            self._df.sort_values(self._tsName, ascending=True, inplace=True)
-            # set the timestamp as the index
-            self._df.set_index(self._tsName, inplace=True)
 
             # now the timestamp is the index, so filter based on the specified
             # start and end times
