@@ -23,6 +23,15 @@ import pandas as pd
 # This file implements an data contaner which holds time stamped values,
 # indexed and sorted by time stamp. The data container is implemented as a
 # Pandas Dataframe.  The timestamp is a Datetime, and the values are floats. 
+#
+# The source data used to populate the container can have multiple value
+# columns, but one column needs have a name which matches yName. This column
+# will be considered the "value" column.  
+#
+# The source data used to populate the container also must have one value
+# column or an index column with a name that matches tsName. This column will be
+# used as the index.
+#
 # The constructore is expecting a data frame which is used as the source data.
 #
 # The constructor (ctor) has these areguments:
@@ -127,6 +136,7 @@ import pandas as pd
 # if a TsIdxData object is created without specifing a source data frame (df param)
 # then the object data will be an empty dataframe, and there is no way to populate
 # it.  
+#
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
             valueQuery=None, startQuery=None, endQuery=None,

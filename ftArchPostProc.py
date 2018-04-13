@@ -525,8 +525,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         instData.append(TsIdxData(instName, tsName, valName, df_valData,
                                   args.valueQuery, startArg, endArg,
                                   sourceTimeFormat))
-        quit()
-    # The data is now in instData in data frames. Ddone with the source data. Delete it.
+    # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
 
 elif args.a and len(headerList) >= 2:
