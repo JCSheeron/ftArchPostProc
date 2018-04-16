@@ -528,9 +528,8 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
 
-elif args.a and len(headerList) >= 2:
-    # archive data, and there are at least two (time/value pair) cols
-    # TODO: archive data case
+elif args.a and len(headerList) >= 7:
+    # archive data, and at least the expected number of columns are present
     print('\nArchive data file specified. The data is expected to be formatted as \
 follows:\n    ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value\n \
 Where ValueId is unique across the table.  TagId is unique for a given tag. \n \
@@ -539,8 +538,8 @@ not necessarily synchronized.\n')
     # From the source data, create a data frame with just the
     # tag id, tag name, time stamp, value
     # where the tag id and time stamp is a multi-index
-    df_valData = df_source.drop(columns=[headerList[0],headerList[4],headerList[5]],
-                                inplace=False,errors='ignore')
+    df_valData = df_source.drop(columns=[headerList[0], headerList[4], headerList[5]],
+                                inplace=False, errors='ignore')
     # So sorting works as expected, before setting the indexes,
     # set the tag id to an int, the timestamp to a timestamp, and the value to a float
     df_valData[headerList[1]] = df_valData[headerList[1]].astype('int',errors='ignore')
@@ -572,7 +571,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     # sort the index for possible better performance later
     df_valData.sort_index(inplace=True)
 
-    # Create a dataframe to hold a unique list of tag ids and tag names.
+    # Now create a dataframe to hold a unique list of tag ids and tag names.
     df_tagList = df_source.drop(columns=[headerList[0],headerList[3],headerList[4],
                                          headerList[5],headerList[6]],
                                 inplace=False, errors='ignore')
@@ -586,6 +585,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     df_tagList.sort_index(inplace=True)
 
     # done with the source data. Delete it.
+    # TODO: Does this free up anyting
     del df_source
 
     # Now we have a sorted list of tags and a dataframe full of values.
@@ -613,18 +613,28 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         # all the timestamped values for the current id. No need for the
         # tag name (it is the same for every row, and captured above, so leave
         # it out.
-        df_valData = pd.DataFrame(df_valData.loc[(instId, ), 'Value':]) 
-        print(df_valData)
+        df_instData = pd.DataFrame(data=df_valData.loc[(instId, ), headerList[6]:]) 
+        # label the timestamp index column and the value column so the df column
+        # names being used to make the TsIdxData match the passed in column names.
+        df_instData.index.name = tsName
+        df_instData.columns = [valName]
         # make an object with the instrument name, labels and data frame
         # instrument data object, and append it to the list.
         # Querying of value and filtering of timestamps will happen during
         # construction of the object
-        instData.append(TsIdxData(instName, tsName, valName, df_valData,
+        instData.append(TsIdxData(instName, tsName, valName, df_instData,
                                   args.valueQuery, startArg, endArg,
                                   sourceTimeFormat))
-        #print(instData)
-        quit()
-    quit()
+        # the instrument data is now captured in the InstData objects.
+        # delete the valData dataframe to free up resources.
+        # TODO: Does this free up anyting
+        del df_instData
+
+    # the value data for all the instruments is now captured in the InstData objects.
+    # delete the valData dataframe to free up resources.
+    # TODO: Does this free up anyting
+    del df_valData
+
 
 # **** Determine the earliest start time, the latest end time, and the minimum
 # frequency for the instruments. These will be used to generate the master time
