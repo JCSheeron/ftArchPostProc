@@ -56,15 +56,17 @@
 # Must be used with the -a option. Must have the same format/layout as an archive
 # input file.
 #
-# TODO: -mf probably not used
-# -mf or --mergeFill (optional, default='ffill') Merge fill. How to fill missing data
-# when merging files. Options are "ffill" or "pad" to fill from last valid value
-# to the next valid value, "backfill" or "bfill" to fill using the next valid
-# value to back fill a gap, "value" to use a value specified with the -mv option,
-# or "none" to use np.nan (not a number representation).
-# Ignored if merge files are not specified
+# -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
+# Merge these named files with the data in the inputFileName before processing.
+# Must have the same format/layout as the input file.
 #
-# TODO: -mv probably not used
+# -mf or --mergeFill (optional, default='ffill') Merge fill. How to fill missing data
+# when merging files historical trend files (-t option).
+# Options are "ffill" or "pad" to fill from last valid value to the next valid value,
+# "backfill" or "bfill" to fill using the next valid value to back fill a gap, 
+# "value" to use a value specified with the -mv option, or "none" to use
+# np.nan (not a number representation). Ignored if merge files are not specified.
+#
 # -mv or --mergeValue (optional, float, default=-9999.0). Used when -mf option
 # is specified as "value".  Ignored if merge files are not specified or if -mf is
 # not "value"
@@ -227,7 +229,7 @@ eplStr="""Final Test Archive Data Post Processing
  Options are "ffill" or "pad" to fill from last valid value to the next valid value,
  "backfill" or "bfill" to fill using the next valid value to back fill a gap, 
  "value" to use a value specified with the -mv option, or "none" to use
- np.nan (not a number representation). Ignored if merge files are not specified
+ np.nan (not a number representation). Ignored if merge files are not specified.
 
  -mv or --mergeValue (optional, float, default=-9999.0). Used when -mf option
  is specified as "value".  Ignored if merge files are not specified or if -mf is
@@ -305,19 +307,19 @@ parser.add_argument('outputFileName', help= 'Output data file (csv)')
 parser.add_argument('-am1', '--archiveMerge1', default=None, metavar='', \
                    help='Merge this named file with the data in the \
 inputFileName before processing. Must be used with the -a option. \
-Must have the same format/layout as an archive input file.')
+Must have the same format/layout as the input file.')
 parser.add_argument('-am2', '--archiveMerge2', default=None, metavar='', \
                    help='Merge this named file with the data in the \
 inputFileName before processing. Must be used with the -a option. \
-Must have the same format/layout as an archive input file.')
+Must have the same format/layout as the input file.')
 parser.add_argument('-am3', '--archiveMerge3', default=None, metavar='', \
                    help='Merge this named file with the data in the \
 inputFileName before processing. Must be used with the -a option. \
-Must have the same format/layout as an archive input file.')
+Must have the same format/layout as the input file.')
 parser.add_argument('-am4', '--archiveMerge4', default=None, metavar='', \
                    help='Merge this named file with the data in the \
 inputFileName before processing. Must be used with the -a option. \
-Must have the same format/layout as an archive input file.')
+Must have the same format/layout as the input file.')
 parser.add_argument('-mf', '--mergeFill', default='ffill', \
                     choices=['ffill', 'pad', 'bfill', 'backfill', 'value', 'none'], metavar='', \
                     help='Merge fill. How to fill missing data when merging files. \
@@ -531,6 +533,149 @@ have the following format:\n \
     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ... \n\
 and the timestamps may or may not be synchronized.')
 
+    # If there are files specified to merge, merge them with the input file before 
+    # further processing. Since this file format has independent time/value pairs
+    # in columns going to the right, this merge simply makes the source data wider
+    # by appending columns (pd.concat with axis=1).
+    # Merge File 1
+    if args.archiveMerge1 is not None:
+        try:
+            print('Merging file "' + args.archiveMerge1 + '".')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
+                            delim_whitespace=False, encoding=args.sourceEncoding,
+                            header=0, dtype = str, skipinitialspace=True)
+        except:
+            print('ERROR opening the file specified with the -am1/archiveMerge1 \
+parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
+            quit()
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are different length. 
+        # This isn't different than in the input file.
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        # drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
+
+        del df_source
+        del df_merge
+        df_source = df_merged
+        del df_merged
+
+# Merge File 2
+    if args.archiveMerge2 is not None:
+        try:
+            print('Merging file "' + args.archiveMerge2 + '".')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
+                            delim_whitespace=False, encoding=args.sourceEncoding,
+                            header=0, dtype = str, skipinitialspace=True)
+        except:
+            print('ERROR opening the file specified with the -am2/archiveMerge2\
+parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
+            quit()
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are different length. 
+        # This isn't different than in the input file.
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        # drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
+
+        del df_source
+        del df_merge
+        df_source = df_merged
+        del df_merged
+
+    # Merge File 3
+    if args.archiveMerge3 is not None:
+        try:
+            print('Merging file "' + args.archiveMerge3 + '".')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
+                            delim_whitespace=False, encoding=args.sourceEncoding,
+                            header=0, dtype = str, skipinitialspace=True)
+        except:
+            print('ERROR opening the file specified with the -am3/archiveMerge3 \
+parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
+            quit()
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are different length. 
+        # This isn't different than in the input file.
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        # drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
+
+        del df_source
+        del df_merge
+        df_source = df_merged
+        del df_merged
+        
+    # Merge File 4
+    if args.archiveMerge4 is not None:
+        try:
+            print('Merging file "' + args.archiveMerge4 + '".')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
+                            delim_whitespace=False, encoding=args.sourceEncoding,
+                            header=0, dtype = str, skipinitialspace=True)
+        except:
+            print('ERROR opening the file specified with the -am4/archiveMerge4 \
+parameter: "' + args.archiveMerge1+ '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
+            quit()
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are different length. 
+        # This isn't different than in the input file.
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        # drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
+
+        del df_source
+        del df_merge
+        df_source = df_merged
+        del df_merged
+        # TODO: Make sure duplicate rows are handled.
+        # Needed here or already taken care of below?
+    quit()
+
     for idx in range(0, len(headerList), 2):
         # For each header entry, make instrument and timestamp column names.
         # Even indexes are timestamps, odd indexes are values.
@@ -606,7 +751,9 @@ Normally there are multiple TagIds each at multiple timestamps. Timestamps are \
 not necessarily synchronized.\n')
 
     # If there are files specified to merge, merge them with the input file before 
-    # further processing.
+    # further processing. Since the file format has rows being unique on 
+    # TagId and Timestamp combo, this merge simply makes the source data longer
+    # by appending rows (pd.concat with axis=0).
     # Merge File 1
     if args.archiveMerge1 is not None:
         try:
@@ -628,6 +775,12 @@ Unexpected encoding can also cause this error.')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
         del df_source
         del df_merge
         df_source = df_merged
@@ -654,6 +807,12 @@ Unexpected encoding can also cause this error.')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
         del df_source
         del df_merge
         df_source = df_merged
@@ -680,6 +839,12 @@ Unexpected encoding can also cause this error.')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
         del df_source
         del df_merge
         df_source = df_merged
@@ -706,18 +871,18 @@ Unexpected encoding can also cause this error.')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
         del df_source
         del df_merge
         df_source = df_merged
         del df_merged
     
     
-    # use string as the data type for all columns to prevent automatic
-    # datatype detection. We don't know ahead of time how many columns are
-    # being read in, so we don't yet know the types.
-    df_source = pd.read_csv(args.inputFileName, sep=args.sourceDelimiter,
-                        delim_whitespace=False, encoding=args.sourceEncoding,
-                        header=0, dtype = str, skipinitialspace=True)
     
     # From the source data, create a data frame with just the
     # tag id, tag name, time stamp, value
