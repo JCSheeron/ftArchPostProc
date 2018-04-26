@@ -18,8 +18,14 @@
 # Normally there are multiple TagIds each at multiple timestamps. Timestamps are
 # not necessarily synchronized.
 #
-# Note: The -t and -a options are mutually exclusive, and one or the other must
-# be specified. 
+# In the case of a time normalized export file (the -n command line argument),
+# the data columns are as follows:
+# Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ...
+#
+# Note: The -h, -n, and -a options are mutually exclusive. One and only one must
+# be specified.
+#
+# TODO: Update merge related params
 #
 # Given an input file, the program will produce a *.csv file with the name
 # specified as the outputFileName with the format:
@@ -186,8 +192,12 @@ eplStr="""Final Test Archive Data Post Processing
  Normally there are multiple TagIds each at multiple timestamps. Timestamps are
  not necessarily synchronized.
 
- Note: The -t and -a options are mutually exclusive, and one or the other must
- be specified. 
+ In the case of a time normalized export file (the -n command line argument), the data
+ columns are as follows:
+ Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ...
+
+ Note: The -h, -n, and -a options are mutually exclusive. One and only one must
+ be specified.
 
  Given an input file, the program will produce a *.csv file with the name
  specified as the outputFileName with the format:
@@ -398,6 +408,8 @@ typegroup.add_argument('-t',  action='store_true', default=False, \
                     help='Historical trend input file type (format).')
 typegroup.add_argument('-a', action='store_true', default=False, \
                     help='Archive data input file type (format).')
+typegroup.add_argument('-n', action='store_true', default=False, \
+                    help='Time normalized input file type (format).')
 # parse the arguments
 args = parser.parse_args()
 

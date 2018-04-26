@@ -14,8 +14,15 @@
  columns are as follows:
  ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags
  and there are normally multiple valueIDs each at multiple timestamps.
- Note: The -h and -a options are mutually exclusive, and one or the other must
- be specified. 
+
+ In the case of a time normalized export file (the -n command line argument), the data
+ columns are as follows:
+ Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ...
+
+ Note: The -h, -n, and -a options are mutually exclusive. One and only one must
+ be specified.
+
+ TODO: Update merge related params
 
  Given an input file, the program will produce a *.csv file with the name
  specified as the outputFileName with the format:
@@ -42,9 +49,17 @@
 
  -t, (required and mutually exclusive with -a).  Input file
  is a historical trend export file.
+ Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
 
- -a (required and mutually exclusive with -h). Input file is a
- archive export file.  
+ -a (required and mutually exclusive with -t and -n). Input file is a
+ archive export file. The format is:
+ ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags
+
+ -n (required and mutuall exclusive with -a and -t). Input file is a time
+ normalized file. The format is:
+ Timestamp, Tag 1 Value, Tag 2 Value, Tag 3 Value ...
+
+ TODO: Update merge related params
 
  -se or --sourceEncoding (optional, default of "utf-16"). Source file encoding.
 
