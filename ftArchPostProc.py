@@ -8,19 +8,21 @@
 #
 # In the case of a historical trend generated file (the -t command line
 # argument), the data columns are as follows:
-# Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
+#   Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
 # and the timestamps are not synchronized.
 #
 # In the case of a archive export file (the -a command line argument), the data
 # columns are as follows:
-# ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
+#   ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
 # Where ValueId is unique across the table.  TagId is unique for a given tag.
 # Normally there are multiple TagIds each at multiple timestamps. Timestamps are
 # not necessarily synchronized.
 #
 # In the case of a time normalized export file (the -n command line argument),
 # the data columns are as follows:
-# Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ...
+#   Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
+# where Timestamp is in local time, and the Bias is a time zone adjustment value,
+# in minutes, that gets added to the Timestamp to get UTC.
 #
 # Note: The -h, -n, and -a options are mutually exclusive. One and only one must
 # be specified.
@@ -182,19 +184,21 @@ eplStr="""Final Test Archive Data Post Processing
 
  In the case of a historical trend generated file (the -t command line
  argument), the data columns are as follows:
- Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
+     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
  and the timestamps are not synchronized.
 
  In the case of a archive export file (the -a command line argument), the data
  columns are as follows:
- ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
+     ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
  Where ValueId is unique across the table.  TagId is unique for a given tag.
  Normally there are multiple TagIds each at multiple timestamps. Timestamps are
  not necessarily synchronized.
 
  In the case of a time normalized export file (the -n command line argument), the data
  columns are as follows:
- Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ...
+     Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
+ where Timestamp is in local time, and the Bias is a time zone adjustment value,
+ in minutes, that gets added to the Timestamp to get UTC.
 
  Note: The -h, -n, and -a options are mutually exclusive. One and only one must
  be specified.
@@ -224,11 +228,17 @@ eplStr="""Final Test Archive Data Post Processing
 
  outputFileName (required, positional). The .csv output file name.
 
- -t, (required and mutually exclusive with -a).  Input file
- is a historical trend export file.
+ -t, (required and mutually exclusive with -a and -n).  Input file
+ is a historical trend export file.  The format is:
+     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
 
- -a (required and mutually exclusive with -t). Input file is a
- archive export file. 
+ -a (required and mutually exclusive with -t and -n). Input file is a
+ archive export file. The format is:
+     ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
+
+ -n (required and mutually exclusive with -t and -a). Input file is a time
+ normalized export file.  The format is:
+     Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
 
  -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
  Merge these named files with the data in the inputFileName before processing.
@@ -713,9 +723,10 @@ Unexpected encoding can also cause this error.')
         # member as the tag name -- this allows tag names with spaces to be
         # preserved
         instName = headerList[idx].rpartition(' ')[0] 
-        # replace the spaces and hyphens with underscores
+        # replace the spaces, hyphens, and periods with underscores
         instName = instName.replace(' ', '_')
         instName = instName.replace('-', '_')
+        instName = instName.replace('.', '_')
         # Generate timestamp and value field (column) names.
         # These will be used for the exported data.
         # Include the instr name in the timestamp column label so it can be
@@ -976,9 +987,10 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         # preserved
         instId = trow[0]
         instName = trow[1]
-        # replace the spaces and hyphens with underscores
+        # replace the spaces, hyphens, and periods with underscores
         instName = instName.replace(' ', '_')
         instName = instName.replace('-', '_')
+        instName = instName.replace('.', '_')
         #print a message showing what we are processing
         print('\nProcessing ' + instName)
         # generate timestamp and value field (column) names
@@ -1012,15 +1024,18 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     # TODO: Does this free up anyting
     del df_valData
 
-elif args.n and len(headerList) >= 2:
-    # normalized time data, and there are at least two (time/value pair) cols
-    # In the normalized time data case, loop thru every other column to get to the 
-    # time stamp columns. The instrument name can be derrived from this and the 
-    # values can be obtained from a relative (+1) index from the timestamp
+elif args.n and len(headerList) >= 3:
+    # normalized time data, and there is at least 1 instrument worth of data.
+    # In the normalized time data case, the first column is the timestamp, and 
+    # every column after the 3rd is instrument data headered with the instrument
+    # name.
     print('\nNormalized Time Data Specified. The source data is expected to \
 have the following format:\n \
-    TimeStamp, Tag1 Value, Tag2 Value, Tag 3 Value ... ')
+    TimeStamp, Time Bias, Tag1 Value, Tag2 Value, Tag 3 Value ... ')
 
+    # TODO: Merge code is here as a place holder.  It needs to be modified to fit 
+    # the normalized option ...
+    #
     # If there are files specified to merge, merge them with the input file before 
     # further processing. Since this file format has independent time/value pairs
     # in columns going to the right, this merge simply makes the source data wider
@@ -1040,9 +1055,22 @@ have the following format:\n \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
             quit()
+        # In this case, the new data may contain additional times for the same tag
+        # or it may contain additional tags at the same or new times. In order to
+        # merge this data correctly, set the source and the data to merge to have
+        # the timestamp column as an index.
+        df_source.set_index(df_source.columns[0], inplace=True)
+        print('**** Input Data indexed ****')
+        print(df_source)
+        df_merge.set_index(df_merge.columns[0], inplace=True)
+        print('**** Merge Data indexed ****')
+        print(df_merge)
+        
+        
+        #
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
-        # There may be NaN values present when/if columns are different length. 
-        # This isn't different than in the input file.
+        # There may be NaN values present when/if columns are different length, 
+        # or when the timestamps don't align. 
         df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
@@ -1175,21 +1203,17 @@ Unexpected encoding can also cause this error.')
 
     # TODO: Make sure duplicate rows are handled.
     # Needed here or already taken care of below?
-    quit()
 
-    for idx in range(0, len(headerList), 2):
-        # The first column is the timestamp, and the others are all instrument
-        # names.  For each header entry, make instrument and timestamp column names.
-        # Even indexes are timestamps, odd indexes are values.
-        # get the inst name, leaving off the bit after the last space, which is
-        # normally 'Time' or 'ValueY'
-        # rpartition returns a tuple: first, separator, last. Use the first 
-        # member as the tag name -- this allows tag names with spaces to be
-        # preserved
-        instName = headerList[idx].rpartition(' ')[0] 
-        # replace the spaces and hyphens with underscores
+    for idx in range(2, len(headerList) - 1):
+        # The first column is the timestamp, the second is the Time Bias,
+        # and the others are all instrument names.
+        # For each instrument, make instrument and timestamp column names.
+        # Starting with the third column (index 2), get the inst name.
+        instName = headerList[idx]
+        # replace the spaces, hyphens, and periods with underscores
         instName = instName.replace(' ', '_')
         instName = instName.replace('-', '_')
+        instName = instName.replace('.', '_')
         # Generate timestamp and value field (column) names.
         # These will be used for the exported data.
         # Include the instr name in the timestamp column label so it can be
@@ -1199,7 +1223,8 @@ Unexpected encoding can also cause this error.')
         # print a message showing what we are processing
         print('\nProcessing ' + instName)
         # create a new dataframe for the instrument and use the above column names
-        df_valData = pd.DataFrame(data=df_source.iloc[:,[idx,idx+1]])
+        # Use the timestamp column and the instrument data column
+        df_valData = pd.DataFrame(data=df_source.iloc[:,[0,idx]])
         df_valData.columns = [tsName, valName]
         # change the data types of the timestamp and value columns if needed
         # value data needs to be float
@@ -1233,7 +1258,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         df_valData.set_index(tsName, inplace=True)
         # sort the index for possible better performance later
         df_valData.sort_index(inplace=True)
-
         # make an object with the instrument name, labels and data frame
         # instrument data object, and append it to the list.
         # Querying of value and filtering of timestamps will happen during
@@ -1243,7 +1267,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
                                   sourceTimeFormat))
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
-
 
 # **** Determine the earliest start time, the latest end time, and the minimum
 # frequency for the instruments. These will be used to generate the master time

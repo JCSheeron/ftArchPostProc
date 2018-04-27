@@ -131,6 +131,9 @@ import pandas as pd
 #     count
 #        the number of rows in the data frame 
 #
+#     isEmpty
+#       boolean true if data frame is empty
+#
 # TODO: There is no way to append or replace data.  The appendData and 
 # replaceData methods need an implementation. Currently,
 # if a TsIdxData object is created without specifing a source data frame (df param)
@@ -413,18 +416,23 @@ The source data is unused, leaving the data set empty.\n ' )
                     print('    Frequency:', self._timeOffset)
 
     def __repr__(self):
-        outputMsg=  '{:13} {}'.format('Name: ', self.name + '\n')
-        outputMsg+= '{:13} {:18} {:10} {}'.format('Index: ', self._df.index.name, \
+        outputMsg=  '{:13} {}'.format('Name: ', self._name + '\n')
+        if self.isEmpty: 
+            outputMsg+= 'Contains no data!\n'
+            outputMsg+= '{:13} {}'.format('Length: ', str(self.count) + '\n')
+            return (outputMsg)
+        else:
+            outputMsg+= '{:13} {:18} {:10} {}'.format('Index: ', self._df.index.name, \
 'datatype: ', str(self._df.index.dtype) + '\n')
-        outputMsg+= 'Columns:\n'
-        for col in self.columns:
-            outputMsg+= '{:4} {:15} {} {}'.format(' ', col, self.columns[col], '\n')
-        outputMsg+= '{:13} {}'.format('Value Query: ', self.valueQuery + '\n')
-        outputMsg+= '{:13} {}'.format('Start Time: ', str(self.startTs) + '\n')
-        outputMsg+= '{:13} {}'.format('End Time: ', str(self.endTs) + '\n')
-        outputMsg+= '{:13} {}'.format('Period: ', str(self.timeOffset) + '\n')
-        outputMsg+= '{:13} {}'.format('Length: ', str(self.count) + '\n')
-        return(outputMsg)
+            outputMsg+= 'Columns:\n'
+            for col in self.columns:
+                outputMsg+= '{:4} {:15} {} {}'.format(' ', col, self.columns[col], '\n')
+            outputMsg+= '{:13} {}'.format('Value Query: ', self._vq + '\n')
+            outputMsg+= '{:13} {}'.format('Start Time: ', str(self.startTs) + '\n')
+            outputMsg+= '{:13} {}'.format('End Time: ', str(self.endTs) + '\n')
+            outputMsg+= '{:13} {}'.format('Period: ', str(self._timeOffset) + '\n')
+            outputMsg+= '{:13} {}'.format('Length: ', str(self.count) + '\n')
+            return(outputMsg)
 
     def resample(self, resampleArg='S', stats='m'):
         # Resample the data from the complete dataframe.
@@ -460,7 +468,7 @@ specified. Using 1 Second.')
 period specified. Using 1 second.')
                 resampleTo = to_offset('S')
 
-        if resampleTo < self.timeOffset:
+        if resampleTo < self._timeOffset:
             # Data will be upsampled. We'll have more rows than data.
             # Forward fill the data for the new rows -- a new row will use the
             # previous recorded value until a new recorded value is available.
@@ -490,7 +498,7 @@ Set "stats" to an empty string ("") or "None" to eliminate this warning.\n')
                         self._df.iloc[:,0].resample(resampleTo).pad()
                 # print a message
                 print('    ' + self.name + ': Upsampled from ' \
-                    + str(self.timeOffset) + ' to ' + str(resampleTo))
+                    + str(self._timeOffset) + ' to ' + str(resampleTo))
                 # update the object frequency
                 self._timeOffset = resampleTo
                 # now overwrite the original dataframe with the resampled one
@@ -500,10 +508,10 @@ Set "stats" to an empty string ("") or "None" to eliminate this warning.\n')
                 return
             except:
                 print('    WARNING: ' + self._name + ': Unable to resample \
-data. Data unchanged. Frequency is ' + str(self.timeOffset))
+data. Data unchanged. Frequency is ' + str(self._timeOffset))
                 print('    Error: ', sys.exc_info())
                 return
-        elif resampleTo > self.timeOffset:
+        elif resampleTo > self._timeOffset:
             # Data will be downsampled. We'll have more data than rows.
             # This means we can calculate statistics on the values between
             # those being displayed.  Use the stats option to determine which
@@ -594,8 +602,8 @@ data. Data unchanged. Frequency is ' + str(self.timeOffset))
                             self._df.iloc[:,0].resample(resampleTo,
                             label='right', closed='right').std()
                 # print a message
-                print('    ' + self.name + ': Downsampled from ' + \
-                      str(self.timeOffset) + ' to ' + str(resampleTo))
+                print('    ' + self._name + ': Downsampled from ' + \
+                      str(self._timeOffset) + ' to ' + str(resampleTo))
                 # update the object frequency
                 self._timeOffset = resampleTo
                 # now overwrite the original dataframe with the resampled one
@@ -605,13 +613,13 @@ data. Data unchanged. Frequency is ' + str(self.timeOffset))
                 return
             except:
                 print('    WARNING: ' + self._name + ': Unable to resample \
-data. Data unchanged. Frequency is ' + str(self.timeOffset))
+data. Data unchanged. Frequency is ' + str(self._timeOffset))
                 print('    Error: ', sys.exc_info())
                 return
         else:
             # resampling not needed. Specified freq matches data already
-            print('    ' + self.name + ': Resampling not needed. New frequency \
-matches data frequency. Data unchanged. Frequency is ' + str(self.timeOffset))
+            print('    ' + self._name + ': Resampling not needed. New frequency \
+matches data frequency. Data unchanged. Frequency is ' + str(self._timeOffset))
             return
            
     def appendData(srcDf):
@@ -667,4 +675,8 @@ matches data frequency. Data unchanged. Frequency is ' + str(self.timeOffset))
     @property
     def count(self):
         return len(self._df.index)
+
+    @property
+    def isEmpty(self):
+        return self._df.empty 
 
