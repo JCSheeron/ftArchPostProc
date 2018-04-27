@@ -438,6 +438,7 @@ args = parser.parse_args()
 # args.noExportMsg      True/False Exclude export control message when set
 # args.t                True/False  Historical trend input file type when set
 # args.a                True/False  Archive data input file type when set
+# args.n                True/False  Time Normalized input file type when set.
 
 # Put the begin mark here, after the arg parsing, so argument problems are
 # reported first.
@@ -531,7 +532,9 @@ headerList = df_source.columns.values.tolist()
 # make a spot for a list of instrument InstData objects
 instData = []
 
-# ****Iterate thru the header list.
+# ****Merge data and then iterate thru the header list.
+# Merge the data if any -am file name params are specified
+# Update the header list if needed (needed after merge in the -t and -n cases)
 # Create desired column names: value_<instName> and timestamp_<instName>
 # Create a instrument data object with data sliced from the big data frame
 # look at the -t or -a argument to know what format the data is in 
@@ -542,7 +545,7 @@ if args.t and len(headerList) >= 2:
     # values can be obtained from a relative (+1) index from the timestamp
     print('\nHistorical Trend Data Specified. The source data is expected to \
 have the following format:\n \
-    Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ... \n\
+    Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2 Value ... \n\
 and the timestamps may or may not be synchronized.')
 
     # If there are files specified to merge, merge them with the input file before 
@@ -559,6 +562,7 @@ and the timestamps may or may not be synchronized.')
             df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
+            #
         except:
             print('ERROR opening the file specified with the -am1/archiveMerge1 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
@@ -582,6 +586,8 @@ Unexpected encoding can also cause this error.')
         del df_merge
         df_source = df_merged
         del df_merged
+        # update the header list after the merge
+        headerList = df_source.columns.values.tolist()
 
 # Merge File 2
     if args.archiveMerge2 is not None:
@@ -617,6 +623,9 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
 
+        # update the header list after the merge
+        headerList = df_source.columns.values.tolist()
+
     # Merge File 3
     if args.archiveMerge3 is not None:
         try:
@@ -651,6 +660,9 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
         
+        # update the header list after the merge
+        headerList = df_source.columns.values.tolist()
+
     # Merge File 4
     if args.archiveMerge4 is not None:
         try:
@@ -684,8 +696,12 @@ Unexpected encoding can also cause this error.')
         del df_merge
         df_source = df_merged
         del df_merged
-        # TODO: Make sure duplicate rows are handled.
-        # Needed here or already taken care of below?
+        
+        # update the header list after the merge
+        headerList = df_source.columns.values.tolist()
+
+    # TODO: Make sure duplicate rows are handled.
+    # Needed here or already taken care of below?
     quit()
 
     for idx in range(0, len(headerList), 2):
@@ -995,6 +1011,238 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     # delete the valData dataframe to free up resources.
     # TODO: Does this free up anyting
     del df_valData
+
+elif args.n and len(headerList) >= 2:
+    # normalized time data, and there are at least two (time/value pair) cols
+    # In the normalized time data case, loop thru every other column to get to the 
+    # time stamp columns. The instrument name can be derrived from this and the 
+    # values can be obtained from a relative (+1) index from the timestamp
+    print('\nNormalized Time Data Specified. The source data is expected to \
+have the following format:\n \
+    TimeStamp, Tag1 Value, Tag2 Value, Tag 3 Value ... ')
+
+    # If there are files specified to merge, merge them with the input file before 
+    # further processing. Since this file format has independent time/value pairs
+    # in columns going to the right, this merge simply makes the source data wider
+    # by appending columns (pd.concat with axis=1).
+    # Merge File 1
+    if args.archiveMerge1 is not None:
+        try:
+            print('Merging file "' + args.archiveMerge1 + '".')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
+                            delim_whitespace=False, encoding=args.sourceEncoding,
+                            header=0, dtype = str, skipinitialspace=True)
+        except:
+            print('ERROR opening the file specified with the -am1/archiveMerge1 \
+parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
+            quit()
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are different length. 
+        # This isn't different than in the input file.
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        # drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
+
+        del df_source
+        del df_merge
+        df_source = df_merged
+        del df_merged
+        
+        # update the header list after the merge
+        headerList = df_source.columns.values.tolist()
+
+# Merge File 2
+    if args.archiveMerge2 is not None:
+        try:
+            print('Merging file "' + args.archiveMerge2 + '".')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
+                            delim_whitespace=False, encoding=args.sourceEncoding,
+                            header=0, dtype = str, skipinitialspace=True)
+        except:
+            print('ERROR opening the file specified with the -am2/archiveMerge2\
+parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
+            quit()
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are different length. 
+        # This isn't different than in the input file.
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        # drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
+
+        del df_source
+        del df_merge
+        df_source = df_merged
+        del df_merged
+
+        # update the header list after the merge
+        headerList = df_source.columns.values.tolist()
+
+    # Merge File 3
+    if args.archiveMerge3 is not None:
+        try:
+            print('Merging file "' + args.archiveMerge3 + '".')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
+                            delim_whitespace=False, encoding=args.sourceEncoding,
+                            header=0, dtype = str, skipinitialspace=True)
+        except:
+            print('ERROR opening the file specified with the -am3/archiveMerge3 \
+parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
+            quit()
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are different length. 
+        # This isn't different than in the input file.
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        # drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
+
+        del df_source
+        del df_merge
+        df_source = df_merged
+        del df_merged
+        
+        # update the header list after the merge
+        headerList = df_source.columns.values.tolist()
+
+    # Merge File 4
+    if args.archiveMerge4 is not None:
+        try:
+            print('Merging file "' + args.archiveMerge4 + '".')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
+                            delim_whitespace=False, encoding=args.sourceEncoding,
+                            header=0, dtype = str, skipinitialspace=True)
+        except:
+            print('ERROR opening the file specified with the -am4/archiveMerge4 \
+parameter: "' + args.archiveMerge1+ '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
+            quit()
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are different length. 
+        # This isn't different than in the input file.
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        # drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
+        print('**** Input Data ****')
+        print(df_source)
+        print('**** Merge Data ****')
+        print(df_merge)
+        print('**** Merged Data ****')
+        print(df_merged)
+
+        del df_source
+        del df_merge
+        df_source = df_merged
+        del df_merged
+        
+        # update the header list after the merge
+        headerList = df_source.columns.values.tolist()
+
+    # TODO: Make sure duplicate rows are handled.
+    # Needed here or already taken care of below?
+    quit()
+
+    for idx in range(0, len(headerList), 2):
+        # The first column is the timestamp, and the others are all instrument
+        # names.  For each header entry, make instrument and timestamp column names.
+        # Even indexes are timestamps, odd indexes are values.
+        # get the inst name, leaving off the bit after the last space, which is
+        # normally 'Time' or 'ValueY'
+        # rpartition returns a tuple: first, separator, last. Use the first 
+        # member as the tag name -- this allows tag names with spaces to be
+        # preserved
+        instName = headerList[idx].rpartition(' ')[0] 
+        # replace the spaces and hyphens with underscores
+        instName = instName.replace(' ', '_')
+        instName = instName.replace('-', '_')
+        # Generate timestamp and value field (column) names.
+        # These will be used for the exported data.
+        # Include the instr name in the timestamp column label so it can be
+        # identified standalone
+        tsName = 'timestamp_' + instName
+        valName = 'value_' + instName
+        # print a message showing what we are processing
+        print('\nProcessing ' + instName)
+        # create a new dataframe for the instrument and use the above column names
+        df_valData = pd.DataFrame(data=df_source.iloc[:,[idx,idx+1]])
+        df_valData.columns = [tsName, valName]
+        # change the data types of the timestamp and value columns if needed
+        # value data needs to be float
+        if 'float64' != df_valData[valName].dtype:
+            # not a float, but it should be. Change the type
+            df_valData[valName] = df_valData[valName].astype('float',errors='ignore')
+        # timestamp needs to be a date time
+        if 'datetime64[ns]' != df_valData[tsName].dtype:
+            # For changing to timestamps, coerce option for errors is marking
+            # dates after midnight (next day) as NaT.
+            # Not sure why. Try it with raise, first, and you get
+            # all the values. Put it in a try block, just in case an error is
+            # raised.
+            try:
+                df_valData[tsName] = pd.to_datetime(df_valData[tsName],
+                                                errors='raise',
+                                                box = True, 
+                                                format=sourceTimeFormat,
+                                                exact=False,
+                                                #infer_datetime_format = True,
+                                                origin = 'unix')
+            except:
+                print('    WARNING: Problem converting some timestamps from \
+the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+                df_valData[tsName] = pd.to_datetime(df_valData[tsName],
+                                                errors='coerce',
+                                                box = True, 
+                                                infer_datetime_format = True,
+                                                origin = 'unix')
+        # set the timestamp column to be the index
+        df_valData.set_index(tsName, inplace=True)
+        # sort the index for possible better performance later
+        df_valData.sort_index(inplace=True)
+
+        # make an object with the instrument name, labels and data frame
+        # instrument data object, and append it to the list.
+        # Querying of value and filtering of timestamps will happen during
+        # construction of the object
+        instData.append(TsIdxData(instName, tsName, valName, df_valData,
+                                  args.valueQuery, startArg, endArg,
+                                  sourceTimeFormat))
+    # The data is now in instData in data frames. Done with the source data. Delete it.
+    del df_source
 
 
 # **** Determine the earliest start time, the latest end time, and the minimum
