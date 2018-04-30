@@ -13,10 +13,9 @@
 #
 # In the case of a archive export file (the -a command line argument), the data
 # columns are as follows:
-#   ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
-# Where ValueId is unique across the table.  TagId is unique for a given tag.
-# Normally there are multiple TagIds each at multiple timestamps. Timestamps are
-# not necessarily synchronized.
+#   TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality
+# Where normally there are multiple tags each at multiple repeating
+# timestamps. Timestamps are not necessarily synchronized.
 #
 # In the case of a time normalized export file (the -n command line argument),
 # the data columns are as follows:
@@ -53,16 +52,17 @@
 #
 # outputFileName (required, positional). The .csv output file name.
 #
-# -t, (required and mutually exclusive with -a).  Input file
-# is a historical trend export file.
+# -t, (required and mutually exclusive with -a and -n).  Input file
+# is a historical trend export file.  The format is:
+#     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
 #
-# -a (required and mutually exclusive with -t). Input file is a
-# archive export file.  
+# -a (required and mutually exclusive with -t and -n). Input file is a
+# archive export file. The format is:
+#     TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality
 #
-# -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
-# Merge these named files with the data in the inputFileName before processing.
-# Must be used with the -a option. Must have the same format/layout as an archive
-# input file.
+# -n (required and mutually exclusive with -t and -a). Input file is a time
+# normalized export file.  The format is:
+#     Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
 #
 # -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
 # Merge these named files with the data in the inputFileName before processing.
@@ -162,6 +162,7 @@ from dateutil import parser as duparser
 
 # csv file stuff
 import csv
+# not necessarily synchronized.
 
 # arg parser
 import argparse
@@ -189,10 +190,9 @@ eplStr="""Final Test Archive Data Post Processing
 
  In the case of a archive export file (the -a command line argument), the data
  columns are as follows:
-     ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
- Where ValueId is unique across the table.  TagId is unique for a given tag.
- Normally there are multiple TagIds each at multiple timestamps. Timestamps are
- not necessarily synchronized.
+     TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality
+ Where normally there are multiple tags each at multiple repeating
+ timestamps. Timestamps are not necessarily synchronized.
 
  In the case of a time normalized export file (the -n command line argument), the data
  columns are as follows:
@@ -234,7 +234,7 @@ eplStr="""Final Test Archive Data Post Processing
 
  -a (required and mutually exclusive with -t and -n). Input file is a
  archive export file. The format is:
-     ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value
+     TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality
 
  -n (required and mutually exclusive with -t and -a). Input file is a time
  normalized export file.  The format is:
@@ -781,12 +781,11 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
 
-elif args.a and len(headerList) >= 7:
+elif args.a and len(headerList) == 6:
     # archive data, and at least the expected number of columns are present
     print('\nArchive data file specified. The data is expected to be formatted as \
-follows:\n    ValueId,TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,ArchiveGroup,Value\n \
-Where ValueId is unique across the table.  TagId is unique for a given tag. \n \
-Normally there are multiple TagIds each at multiple timestamps. Timestamps are \
+follows:\n    TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality\n \
+Where normally there are multiple tags each at multiple timestamps. Timestamps are \
 not necessarily synchronized.\n')
 
     # If there are files specified to merge, merge them with the input file before 
@@ -926,19 +925,19 @@ Unexpected encoding can also cause this error.')
     # From the source data, create a data frame with just the
     # tag id, tag name, time stamp, value
     # where the tag id and time stamp is a multi-index
-    df_valData = df_source.drop(columns=[headerList[0], headerList[4], headerList[5]],
+    df_valData = df_source.drop(columns=[headerList[3], headerList[5]],
                                 inplace=False, errors='ignore')
     # So sorting works as expected, before setting the indexes,
-    # set the tag id to an int, the timestamp to a timestamp, and the value to a float
-    df_valData[headerList[1]] = df_valData[headerList[1]].astype('int',errors='ignore')
-    df_valData[headerList[6]] = df_valData[headerList[6]].astype('float',errors='ignore')
+    # set the tag id to an int, the value to a float, and the timestamp to a datetime
+    df_valData[headerList[0]] = df_valData[headerList[0]].astype('int',errors='ignore')
+    df_valData[headerList[4]] = df_valData[headerList[4]].astype('float',errors='ignore')
     # force the timestamp to be a datetime
     # coerce option for errors is marking dates after midnight (next
     # day) as NaT. Not sure why. Try it with raise, first, and you get
     # all the values. Put it in a try block, just in case an error is
     # raised.
     try:
-        df_valData[headerList[3]] = pd.to_datetime(df_valData[headerList[3]],
+        df_valData[headerList[3]] = pd.to_datetime(df_valData[headerList[2]],
                                                    errors='raise',
                                                    box = True, 
                                                    format=sourceTimeFormat,
@@ -948,27 +947,27 @@ Unexpected encoding can also cause this error.')
     except:
         print('    WARNING: Problem converting some timestamps from \
 the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
-        df_valData[headerList[3]] = pd.to_datetime(df_valData[headerList[3]],
+        df_valData[headerList[3]] = pd.to_datetime(df_valData[headerList[2]],
                                                    errors='coerce',
                                                    box = True, 
                                                    infer_datetime_format = True,
                                                    origin = 'unix')
 
     # now set the index to a multi-index of TagId,Timestamp
-    df_valData.set_index([headerList[1],headerList[3]], inplace=True)
+    df_valData.set_index([headerList[0],headerList[2]], inplace=True)
     # sort the index for possible better performance later
     df_valData.sort_index(inplace=True)
 
     # Now create a dataframe to hold a unique list of tag ids and tag names.
-    df_tagList = df_source.drop(columns=[headerList[0],headerList[3],headerList[4],
-                                         headerList[5],headerList[6]],
+    df_tagList = df_source.drop(columns=[headerList[2],headerList[3],
+                                         headerList[4],headerList[5]],
                                 inplace=False, errors='ignore')
     # force the id column datatype to an int
-    df_tagList[headerList[1]] = df_tagList[headerList[1]].astype('int',errors='ignore')
+    df_tagList[headerList[0]] = df_tagList[headerList[0]].astype('int',errors='ignore')
     # Drop the duplicate ids
-    df_tagList.drop_duplicates(subset=headerList[1], keep='first', inplace=True)
+    df_tagList.drop_duplicates(subset=headerList[0], keep='first', inplace=True)
     # Set the index to the tagId
-    df_tagList.set_index(headerList[1], inplace=True)
+    df_tagList.set_index(headerList[0], inplace=True)
     # sort the index for possible better performance later
     df_tagList.sort_index(inplace=True)
 
@@ -1002,7 +1001,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         # all the timestamped values for the current id. No need for the
         # tag name (it is the same for every row, and captured above, so leave
         # it out.
-        df_instData = pd.DataFrame(data=df_valData.loc[(instId, ), headerList[6]:]) 
+        df_instData = pd.DataFrame(data=df_valData.loc[(instId, ), headerList[4]:]) 
         # label the timestamp index column and the value column so the df column
         # names being used to make the TsIdxData match the passed in column names.
         df_instData.index.name = tsName
