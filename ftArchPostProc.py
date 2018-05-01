@@ -523,7 +523,7 @@ stats = str(args.stats).lower()
 # make sure the source timestamp format argument is a string
 sourceTimeFormat = str(args.sourceTimeFormat)
 
-# **** Read the csv file into a data frame.  The first row is treated as the header
+# **** read the csv file into a data frame.  The first row is treated as the header
 try:
     # use string as the data type for all columns to prevent automatic
     # datatype detection. We don't know ahead of time how many columns are
@@ -596,8 +596,6 @@ Unexpected encoding can also cause this error.')
         del df_merge
         df_source = df_merged
         del df_merged
-        # update the header list after the merge
-        headerList = df_source.columns.values.tolist()
 
 # Merge File 2
     if args.archiveMerge2 is not None:
@@ -633,9 +631,6 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
 
-        # update the header list after the merge
-        headerList = df_source.columns.values.tolist()
-
     # Merge File 3
     if args.archiveMerge3 is not None:
         try:
@@ -670,9 +665,6 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
         
-        # update the header list after the merge
-        headerList = df_source.columns.values.tolist()
-
     # Merge File 4
     if args.archiveMerge4 is not None:
         try:
@@ -707,8 +699,10 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
         
-        # update the header list after the merge
-        headerList = df_source.columns.values.tolist()
+    # update the header list after the merge to make sure new tags are reflected.
+    headerList = df_source.columns.values.tolist()
+    # sort the data by time
+    df_source.sort_index(inplace=True)
 
     # TODO: Make sure duplicate rows are handled.
     # Needed here or already taken care of below?
@@ -778,13 +772,17 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         instData.append(TsIdxData(instName, tsName, valName, df_valData,
                                   args.valueQuery, startArg, endArg,
                                   sourceTimeFormat))
+        # The instrument data is now contained in the instrument InstData object.
+        # Delte the valData dataframe to free up resources.
+        del df_valData
+
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
 
-elif args.a and len(headerList) == 6:
+elif args.a and len(headerList) >= 6:
     # archive data, and at least the expected number of columns are present
     print('\nArchive data file specified. The data is expected to be formatted as \
-follows:\n    TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality\n \
+follows:\n    TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality\n \
 Where normally there are multiple tags each at multiple timestamps. Timestamps are \
 not necessarily synchronized.\n')
 
@@ -921,7 +919,14 @@ Unexpected encoding can also cause this error.')
         del df_merged
     
     
-    
+    # The data has these column indexes:
+    #     [0] TagId
+    #     [1] TagName
+    #     [2] Timestamp
+    #     [3] DataSource
+    #     [4] Value
+    #     [5] Quality
+
     # From the source data, create a data frame with just the
     # tag id, tag name, time stamp, value
     # where the tag id and time stamp is a multi-index
@@ -937,7 +942,7 @@ Unexpected encoding can also cause this error.')
     # all the values. Put it in a try block, just in case an error is
     # raised.
     try:
-        df_valData[headerList[3]] = pd.to_datetime(df_valData[headerList[2]],
+        df_valData[headerList[2]] = pd.to_datetime(df_valData[headerList[2]],
                                                    errors='raise',
                                                    box = True, 
                                                    format=sourceTimeFormat,
@@ -947,7 +952,7 @@ Unexpected encoding can also cause this error.')
     except:
         print('    WARNING: Problem converting some timestamps from \
 the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
-        df_valData[headerList[3]] = pd.to_datetime(df_valData[headerList[2]],
+        df_valData[headerList[2]] = pd.to_datetime(df_valData[headerList[2]],
                                                    errors='coerce',
                                                    box = True, 
                                                    infer_datetime_format = True,
@@ -972,7 +977,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     df_tagList.sort_index(inplace=True)
 
     # done with the source data. Delete it.
-    # TODO: Does this free up anyting
     del df_source
 
     # Now we have a sorted list of tags and a dataframe full of values.
@@ -1015,30 +1019,69 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
                                   sourceTimeFormat))
         # the instrument data is now captured in the InstData objects.
         # delete the valData dataframe to free up resources.
-        # TODO: Does this free up anyting
         del df_instData
 
-    # the value data for all the instruments is now captured in the InstData objects.
-    # delete the valData dataframe to free up resources.
-    # TODO: Does this free up anyting
+    # The value data for all the instruments is now captured in the InstData objects.
+    # Delete the valData and the tagList dataframes to free up resources.
     del df_valData
+    del df_tagList 
 
+    
 elif args.n and len(headerList) >= 3:
     # normalized time data, and there is at least 1 instrument worth of data.
+    
     # In the normalized time data case, the first column is the timestamp, and 
     # every column after the 3rd is instrument data headered with the instrument
     # name.
     print('\nNormalized Time Data Specified. The source data is expected to \
 have the following format:\n \
     TimeStamp, Time Bias, Tag1 Value, Tag2 Value, Tag 3 Value ... ')
+    # TODO: Time Bias support
+    # KLUDGE: Drop the time bias as the times are already in local time, which 
+    # is what is desired. May be better to do somethign smarter with it, like
+    # modify the TsIdxData object to be UTC and timezone aware.
+    # Timestamps are in local time. No need for hte bias column. Drop it.
+    # NOTE: This is needed in the merge sections also!!
+    df_source.drop(columns=[headerList[1]], inplace=True, errors='ignore')
 
+    # Index the source data time stamp column. Since we know this will be the
+    # index in this case, do this early so we can take advantage of it later.
+    # First make sure the timesamp can be converted to a datetime.
+    tsName = df_source.columns[0]
+    if 'datetime64[ns]' != df_source[tsName].dtype:
+        # For changing to timestamps, coerce option for errors is marking
+        # dates after midnight (next day) as NaT.
+        # Not sure why. Try it with raise, first, and you get
+        # all the values. Put it in a try block, just in case an error is
+        # raised.
+        try:
+            df_source[tsName] = pd.to_datetime(df_source[tsName],
+                                            errors='raise',
+                                            box = True, 
+                                            format=sourceTimeFormat,
+                                            exact=False,
+                                            #infer_datetime_format = True,
+                                            origin = 'unix')
+        except:
+            print('    WARNING: Problem converting some timestamps from \
+the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+            df_source[tsName] = pd.to_datetime(df_source[tsName],
+                                            errors='coerce',
+                                            box = True, 
+                                            infer_datetime_format = True,
+                                            origin = 'unix')
+    # set the timestamp column to be the index
+    df_source.set_index(tsName, inplace=True)
+    # sort the index for possible better performance later
+    df_source.sort_index(inplace=True)
+    
     # TODO: Merge code is here as a place holder.  It needs to be modified to fit 
     # the normalized option ...
     #
     # If there are files specified to merge, merge them with the input file before 
-    # further processing. Since this file format has independent time/value pairs
-    # in columns going to the right, this merge simply makes the source data wider
-    # by appending columns (pd.concat with axis=1).
+    # further processing. This file format has times and tags that may match or
+    # may be additional to the source data. The data merged data my get longer
+    # and/or wider.
     # Merge File 1
     if args.archiveMerge1 is not None:
         try:
@@ -1054,41 +1097,60 @@ have the following format:\n \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
             quit()
+        # Drop the time bias (second) column
+        df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
+
         # In this case, the new data may contain additional times for the same tag
         # or it may contain additional tags at the same or new times. In order to
-        # merge this data correctly, set the source and the data to merge to have
+        # merge this data correctly, set the data to merge to have
         # the timestamp column as an index.
-        df_source.set_index(df_source.columns[0], inplace=True)
-        print('**** Input Data indexed ****')
-        print(df_source)
-        df_merge.set_index(df_merge.columns[0], inplace=True)
+        tsName = df_merge.columns[0]
+        if 'datetime64[ns]' != df_merge[tsName].dtype:
+            # For changing to timestamps, coerce option for errors is marking
+            # dates after midnight (next day) as NaT.
+            # Not sure why. Try it with raise, first, and you get
+            # all the values. Put it in a try block, just in case an error is
+            # raised.
+            try:
+                df_merge[tsName] = pd.to_datetime(df_merge[tsName],
+                                                errors='raise',
+                                                box = True, 
+                                                format=sourceTimeFormat,
+                                                exact=False,
+                                                #infer_datetime_format = True,
+                                                origin = 'unix')
+            except:
+                print('    WARNING: Problem converting some timestamps from \
+    the am1/archiveMerge1 file data.  Timestamps may be incorrect, and/or some rows may be missing.')
+                df_merge[tsName] = pd.to_datetime(df_merge[tsName],
+                                                errors='coerce',
+                                                box = True, 
+                                                infer_datetime_format = True,
+                                                origin = 'unix')
+        # set the timestamp column to be the index
+        df_merge.set_index(tsName, inplace=True)
+        # sort the index for possible better performance later
+        df_merge.sort_index(inplace=True)
         print('**** Merge Data indexed ****')
         print(df_merge)
         
-        
-        #
-        # Now merge the data. Append columns (axis = 1), keeping the header rows.
-        # There may be NaN values present when/if columns are different length, 
-        # or when the timestamps don't align. 
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
-        print('**** Merge Data ****')
-        print(df_merge)
+        # Now merge the data. Use the append method so that columns with the 
+        # same name (same tag), are combined into a single column. Using the
+        # merge method repeats the column so you have two columns with the same
+        # name. With the append method, you get a superposition of the two
+        # columns.
+        df_merged = df_source.append(df_merge)
         print('**** Merged Data ****')
         print(df_merged)
 
+        # Drop the source and make the merged data the new source, then drop the merged data
+        # This is so follow on code always has a valid df_source to work with, just as if
+        # no files were merged.
         del df_source
         del df_merge
         df_source = df_merged
         del df_merged
         
-        # update the header list after the merge
-        headerList = df_source.columns.values.tolist()
-
 # Merge File 2
     if args.archiveMerge2 is not None:
         try:
@@ -1122,9 +1184,6 @@ Unexpected encoding can also cause this error.')
         del df_merge
         df_source = df_merged
         del df_merged
-
-        # update the header list after the merge
-        headerList = df_source.columns.values.tolist()
 
     # Merge File 3
     if args.archiveMerge3 is not None:
@@ -1160,9 +1219,6 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
         
-        # update the header list after the merge
-        headerList = df_source.columns.values.tolist()
-
     # Merge File 4
     if args.archiveMerge4 is not None:
         try:
@@ -1197,17 +1253,17 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
         
-        # update the header list after the merge
-        headerList = df_source.columns.values.tolist()
+    # update the header list after the merge to make sure new tags are reflected
+    headerList = df_source.columns.values.tolist()
+    print('**** Header List ****')
+    print(headerList)
+    # make sure the data is still sorted by time
+    df_source.sort_index(inplace=True)
 
-    # TODO: Make sure duplicate rows are handled.
-    # Needed here or already taken care of below?
-
-    for idx in range(2, len(headerList) - 1):
-        # The first column is the timestamp, the second is the Time Bias,
-        # and the others are all instrument names.
-        # For each instrument, make instrument and timestamp column names.
-        # Starting with the third column (index 2), get the inst name.
+    # At this point, the time stamp is an index, and the instrument
+    # data is in named columns. Loop thru the columns and make instrument
+    # objects.
+    for idx in range(0, len(headerList)):
         instName = headerList[idx]
         # replace the spaces, hyphens, and periods with underscores
         instName = instName.replace(' ', '_')
@@ -1223,8 +1279,11 @@ Unexpected encoding can also cause this error.')
         print('\nProcessing ' + instName)
         # create a new dataframe for the instrument and use the above column names
         # Use the timestamp column and the instrument data column
-        df_valData = pd.DataFrame(data=df_source.iloc[:,[0,idx]])
-        df_valData.columns = [tsName, valName]
+        #df_valData = pd.DataFrame(data=df_source.iloc[:,[idx]])
+        df_valData = pd.DataFrame(data=df_source.iloc[:,idx])
+        print(' **** df_valData ****')
+        print(df_valData)
+        df_valData.columns = [valName]
         # change the data types of the timestamp and value columns if needed
         # value data needs to be float
         if 'float64' != df_valData[valName].dtype:
@@ -1266,6 +1325,8 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
                                   sourceTimeFormat))
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
+    print(instData)
+    quit()
 
 # **** Determine the earliest start time, the latest end time, and the minimum
 # frequency for the instruments. These will be used to generate the master time
