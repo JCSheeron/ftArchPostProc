@@ -382,8 +382,8 @@ The source data is unused, leaving the data set empty.\n ' )
                 # repeated, it looks like the odd/even rows in that order are
                 # repeated.
                 if inferFreq is None or inferFreq == pd.Timedelta(0): 
-                    print('    Determining sampling frequency manually. \
-    Data may have repeated or corrupted timestamps.')
+                    print('    Data may have skipped, missing, repeated or corrupted timestamps.\n \
+   Determining sampling frequency manually.')
                     # Use 3 and 4 if possible, just in case there is
                     # something strange in the beginning. Otherwise, use entries 0
                     # and 1, or give up, and use 1 second.
