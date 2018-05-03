@@ -539,24 +539,33 @@ error.')
 
 # put source the headers into a list
 headerList = df_source.columns.values.tolist()
-# make a spot for a list of instrument InstData objects
+# make a spot for a list of instrument TsIdxData objects
 instData = []
 
-# ****Merge data and then iterate thru the header list.
-# Merge the data if any -am file name params are specified
-# Update the header list if needed (needed after merge in the -t and -n cases)
-# Create desired column names: value_<instName> and timestamp_<instName>
-# Create a instrument data object with data sliced from the big data frame
-# look at the -t or -a argument to know what format the data is in 
+# **** Look at the data type being input (-t, -a, or -n) and make sure there
+# is at least the minimum number of columns for a valid data file. If there are
+# any merge files specified (-am params), then merge them. Finally process the 
+# data into a list of TsIdxData objects, with one object per instrument holding 
+# the time stamped indexed value data.
 if args.t and len(headerList) >= 2:
-    # historical trend data, and there are at least two (time/value pair) cols
+    # Historical trend data, and there are at least two (time/value pair) cols.
+    # The data is expected to have these columns
+    # [0] Tag 1 Timestamp
+    # [1] Tag 1 Value
+    # ...
+    # [(n-1) * 2] Tag n Timestamp
+    # [((n-1) * 2) + 1] Tag n Value
+    #
     # In the historical trend case, loop thru every other column to get to the 
-    # time stamp columns. The instrument name can be derrived from this and the 
+    # time stamp columns. The instrument name can be derived from this and the 
     # values can be obtained from a relative (+1) index from the timestamp
     print('\nHistorical Trend Data Specified. The source data is expected to \
 have the following format:\n \
     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2 Value ... \n\
 and the timestamps may or may not be synchronized.')
+
+    print('**** Input Data ****')
+    print(df_source)
 
     # If there are files specified to merge, merge them with the input file before 
     # further processing. Since this file format has independent time/value pairs
@@ -585,8 +594,6 @@ Unexpected encoding can also cause this error.')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
         print('**** Merge Data ****')
         print(df_merge)
         print('**** Merged Data ****')
@@ -619,8 +626,6 @@ Unexpected encoding can also cause this error.')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
         print('**** Merge Data ****')
         print(df_merge)
         print('**** Merged Data ****')
@@ -653,8 +658,6 @@ Unexpected encoding can also cause this error.')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
         print('**** Merge Data ****')
         print(df_merge)
         print('**** Merged Data ****')
@@ -687,8 +690,6 @@ Unexpected encoding can also cause this error.')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
         print('**** Merge Data ****')
         print(df_merge)
         print('**** Merged Data ****')
@@ -781,7 +782,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
 
 elif args.a and len(headerList) >= 6:
     # archive data, and at least the expected number of columns are present
-    # The data has these column indexes:
+    # The data is expected to these columns:
     #     [0] TagId
     #     [1] TagName
     #     [2] Timestamp
@@ -1027,7 +1028,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     
 elif args.n and len(headerList) >= 3:
     # normalized time data, and there is at least 1 instrument worth of data.
-    # The data has these column indexes:
+    # The data is expected to have these columns:
     #     [0] Timestamp
     #     [1] Time Bias
     #     [2] Tag 1 Value
