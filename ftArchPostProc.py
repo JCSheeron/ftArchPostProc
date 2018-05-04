@@ -539,8 +539,13 @@ error.')
 
 # put source the headers into a list
 headerList = df_source.columns.values.tolist()
-# make a spot for a list of instrument TsIdxData objects
+# Make a spot for a list of instrument TsIdxData objects,
+# and a list of just instrument names. The latter is used to detect
+# data for duplicate instruments. If a duplicate is found, the data is
+# appended to an already existing instrument.
 instData = []
+instDataNames = []
+
 
 # **** Look at the data type being input (-t, -a, or -n) and make sure there
 # is at least the minimum number of columns for a valid data file. If there are
@@ -704,10 +709,8 @@ Unexpected encoding can also cause this error.')
     headerList = df_source.columns.values.tolist()
     # sort the data by time
     df_source.sort_index(inplace=True)
-
     # TODO: Make sure duplicate rows are handled.
     # Needed here or already taken care of below?
-    quit()
 
     for idx in range(0, len(headerList), 2):
         # For each header entry, make instrument and timestamp column names.
@@ -765,16 +768,33 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         df_valData.set_index(tsName, inplace=True)
         # sort the index for possible better performance later
         df_valData.sort_index(inplace=True)
+        
+        # See if instrument is already in the list. If so append the 
+        # data to an existing instrument object already in the object list.
+        # If not, then append a new object with the new data to the name and
+        # object lists.
+        try:
+            # get the index in the name list. If it is present, the instrument
+            # is already present. Append the data. If it isn't present, this 
+            # will throw, and we'll append a new instrument.
+            idx = instDataNames.index(instName)
+            # Appending the data will apply previously specified value queries
+            # and time filtering
+            instData[idx].appendData(df_valData)
+        except:
+            # This instrument is not in the instrument list yet.  
+            # Append it to the name list and the object list
+            instDataNames.append(instName)
+            # Make an object with the instrument name, labels and data frame
+            # instrument data object, and append it to the list.
+            # Querying of value and filtering of timestamps will happen during
+            # construction of the object
+            instData.append(TsIdxData(instName, tsName, valName, df_valData,
+                                     args.valueQuery, startArg, endArg,
+                                     sourceTimeFormat))
 
-        # make an object with the instrument name, labels and data frame
-        # instrument data object, and append it to the list.
-        # Querying of value and filtering of timestamps will happen during
-        # construction of the object
-        instData.append(TsIdxData(instName, tsName, valName, df_valData,
-                                  args.valueQuery, startArg, endArg,
-                                  sourceTimeFormat))
         # The instrument data is now contained in the instrument InstData object.
-        # Delte the valData dataframe to free up resources.
+        # Delete the valData dataframe to free up resources.
         del df_valData
 
     # The data is now in instData in data frames. Done with the source data. Delete it.
@@ -1009,13 +1029,31 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         # names being used to make the TsIdxData match the passed in column names.
         df_instData.index.name = tsName
         df_instData.columns = [valName]
-        # make an object with the instrument name, labels and data frame
-        # instrument data object, and append it to the list.
-        # Querying of value and filtering of timestamps will happen during
-        # construction of the object
-        instData.append(TsIdxData(instName, tsName, valName, df_instData,
-                                  args.valueQuery, startArg, endArg,
-                                  sourceTimeFormat))
+        
+        # See if instrument is already in the list. If so append the 
+        # data to an existing instrument object already in the object list.
+        # If not, then append a new object with the new data to the name and
+        # object lists.
+        try:
+            # get the index in the name list. If it is present, the instrument
+            # is already present. Append the data. If it isn't present, this 
+            # will throw, and we'll append a new instrument.
+            idx = instDataNames.index(instName)
+            # Appending the data will apply previously specified value queries
+            # and time filtering
+            instData[idx].appendData(df_valData)
+        except:
+            # This instrument is not in the instrument list yet.  
+            # Append it to the name list and the object list
+            instDataNames.append(instName)
+            # Make an object with the instrument name, labels and data frame
+            # instrument data object, and append it to the list.
+            # Querying of value and filtering of timestamps will happen during
+            # construction of the object
+            instData.append(TsIdxData(instName, tsName, valName, df_valData,
+                                     args.valueQuery, startArg, endArg,
+                                     sourceTimeFormat))
+
         # the instrument data is now captured in the InstData objects.
         # delete the valData dataframe to free up resources.
         del df_instData
@@ -1400,13 +1438,31 @@ Unexpected encoding can also cause this error.')
         print(' **** df_valData ****')
         print(df_valData)
         # Data should already be sorted.
-        # make an object with the instrument name, labels and data frame
-        # instrument data object, and append it to the list.
-        # Querying of value and filtering of timestamps will happen during
-        # construction of the object
-        instData.append(TsIdxData(instName, tsName, valName, df_valData,
-                                  args.valueQuery, startArg, endArg,
-                                  sourceTimeFormat))
+        
+        # See if instrument is already in the list. If so append the 
+        # data to an existing instrument object already in the object list.
+        # If not, then append a new object with the new data to the name and
+        # object lists.
+        try:
+            # get the index in the name list. If it is present, the instrument
+            # is already present. Append the data. If it isn't present, this 
+            # will throw, and we'll append a new instrument.
+            idx = instDataNames.index(instName)
+            # Appending the data will apply previously specified value queries
+            # and time filtering
+            instData[idx].appendData(df_valData)
+        except:
+            # This instrument is not in the instrument list yet.  
+            # Append it to the name list and the object list
+            instDataNames.append(instName)
+            # Make an object with the instrument name, labels and data frame
+            # instrument data object, and append it to the list.
+            # Querying of value and filtering of timestamps will happen during
+            # construction of the object
+            instData.append(TsIdxData(instName, tsName, valName, df_valData,
+                                     args.valueQuery, startArg, endArg,
+                                     sourceTimeFormat))
+
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
     print(instData)

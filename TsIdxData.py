@@ -139,6 +139,7 @@ import pandas as pd
 # if a TsIdxData object is created without specifing a source data frame (df param)
 # then the object data will be an empty dataframe, and there is no way to populate
 # it.  
+# UPDATE: Append is implemented but not tested.
 #
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
@@ -274,7 +275,8 @@ class TsIdxData(object):
             # and don't use data if not.
             srcCols = df.columns
             srcIndex = df.index.name
-            if not (self._yName in srcCols) or not (self._tsName in srcCols or self._tsName == srcIndex):
+            if not (self._yName in srcCols) or \
+                    not (self._tsName in srcCols or self._tsName == srcIndex):
                 # source data column names are not as needed. Print a msg and bail
                 print('TsIdxData constructor source data name problem for ' + self._name + '. \n \
 The source data needs to have a value column named "' + self._yName + '" and a value \n \
@@ -353,6 +355,7 @@ The source data is unused, leaving the data set empty.\n ' )
                     
                 # Make sure the index is sorted possible better performance later
                 self._df.sort_index(inplace=True)
+
                 # Apply the query string if one is specified.
                 # Replace "val" with the column name.
                 if self._vq != '':
@@ -364,8 +367,10 @@ The source data is unused, leaving the data set empty.\n ' )
                         print('    WARNING: Invalid query string. Ignoring the \
     specified query.')
 
-                # now the timestamp is the index, so filter based on the specified
-                # start and end times
+                # Now the timestamp is the index, so filter based on the specified
+                # start and end times.
+                # Non specified times will be None, so the filter still works as
+                # is. If both are none, no filtering is performed.
                 self._df= self._df.loc[self._startQuery : self._endQuery]
 
                 # Get the inferred frequency of the index. Store this internally,
@@ -622,10 +627,99 @@ data. Data unchanged. Frequency is ' + str(self._timeOffset))
 matches data frequency. Data unchanged. Frequency is ' + str(self._timeOffset))
             return
            
-    def appendData(srcDf):
-        # TODO:  Implement
-        # Enforce or coerce data into compatible structure
-        print('    WARNING: appendData() method not implemented. Data  unchanged.')
+    def appendData(self, srcDf, IgnoreFirstRows=1):
+        # This function takes a source data frame (srcDf) and appends it to the 
+        # member data frame. The column names of the source data are ignored, but 
+        # it is expected that index is or can be converted to a datetime, and the
+        # values are or can be converted to a float.  Use IgnoreFirstRows to set
+        # how many rows to throw away before merging the data. Default is 1, so as
+        # to ignore a header row. Setting IgnoreFirstRows to 0 will treat every
+        # row as data.
+        #
+        # Get the source data into a temp dataframe. Use member column names.
+        df_temp = pd.DataFrame(data=srcDf, columns=[self._tsName, self._yName])
+
+        # drop rows that should be ignored
+        if 1 <= IgnoreFirstRows:
+            df_temp.drop(df_temp.index[0,IgnoreFirstRows])
+
+        print('**** Data to append ****')
+        print(df_temp)
+        quit()
+        # change the value column to a float if needed
+        if 'float64' != df_temp[self._yName].dtype:
+            df_temp[self._yName] = df_temp[self._yName].astype('float',
+                                                                errors='ignore')
+        # get rid of Nan from the values (y-axis)
+        # not strictly necessary, but lack of NaN values tends to make
+        # follow on data analysis less problematic
+        df_temp.dropna(subset=[self._yName], inplace=True)
+        
+        # If the index name is set to the tsName, and the index data type 
+        # is datetime, then the index is all set up. Otherwise make it so...
+        if self._tsName != df_temp.index.name or 'datetime64[ns]' != df_temp.index.dtype:
+            # The name and/or datatype of the index is not as needed.
+            # Reset and redo the index, changing the datatype if needed.
+            df_temp.reset_index(inplace=True)
+            if 'datetime64[ns]' != df_temp[self._tsName].dtype:
+                # For changing to timestamps, coerce option for errors is marking
+                # dates after midnight (next day) as NaT.
+                # Not sure why. Try it with raise, first, and you get
+                # all the values. Put it in a try block, just in case an error is
+                # raised.
+                try:
+                    df_temp[self._tsName] = pd.to_datetime(df_temp[self._tsName],
+                                                            errors='raise',
+                                                            box = True, 
+                                                            format=self._sourceTimeFormat,
+                                                            exact=False,
+                                                            #infer_datetime_format = True,
+                                                            origin = 'unix')
+                except:
+                    print('    WARNING: Problem converting some timestamps from \
+the source data being merged.  Timestamps may be incorrect, and/or some rows may be missing.')
+                    df_temp[self._tsName] = pd.to_datetime(df_temp[self._tsName],
+                                                            errors='coerce',
+                                                            box = True, 
+                                                            infer_datetime_format = True,
+                                                            origin = 'unix')
+            # Condition the data before creating the index
+            # get rid of any NaN and NaT timestamps. These can be from the
+            # original data or from invalid conversions to datetime
+            df_temp.dropna(subset=[self._tsName], inplace=True)
+            # round the timestamp to the nearest ms. Unseen ns and
+            # fractional ms values are not always displayed, and can cause
+            # unexpected merge and up/downsample results
+            df_temp[self._tsName] = df_temp[self._tsName].dt.round('L')
+            # get rid of any duplicate timestamps as a result of rounding
+            df_temp[self._tsName].drop_duplicates(subset=self._tsName,
+                                                   keep='last', inplace=True)
+            # now the data type is correct, and forseen data errors are removed.
+            # Set the index to the timestamp column
+            df_temp.set_index(self._tsName, inplace=True)
+            
+        # Make sure the index is sorted possible better performance later
+        df_temp.sort_index(inplace=True)
+        # Apply the query string if one is specified.
+        # Replace "val" with the column name.
+        if self._vq != '':
+            queryStr = self._vq.replace("val", self._yName)
+            # try to run the query string, but ignore it on error
+            try:
+                df_temp.query(queryStr, inplace = True)
+            except:
+                print('    WARNING: Invalid query string. Ignoring the \
+    specified query when appending data.')
+
+        # Now the timestamp is the index, so filter based on the specified
+        # start and end times.
+        # Non specified times will be None, so the filter still works as
+        # is. If both are none, no filtering is performed.
+        df_temp = df_temp.loc[self._startQuery : self._endQuery]
+
+        # now merge the conditioned data with the member data, along the index
+        # (timestamp) axis
+        self._df = self._df.append(df_temp)
         return
 
     def replaceData(srcDf):
