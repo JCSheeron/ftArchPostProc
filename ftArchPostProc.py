@@ -537,6 +537,9 @@ name, file presence, and permissions. Unexpected encoding can also cause this \
 error.')
     quit()
 
+print('**** Input Data ****')
+print(df_source)
+
 # put source the headers into a list
 headerList = df_source.columns.values.tolist()
 # Make a spot for a list of instrument TsIdxData objects,
@@ -560,6 +563,8 @@ if args.t and len(headerList) >= 2:
     # ...
     # [(n-1) * 2] Tag n Timestamp
     # [((n-1) * 2) + 1] Tag n Value
+    # where the header contains the instrument names plus a suffix for the
+    # timestamp and value columns.
     #
     # In the historical trend case, loop thru every other column to get to the 
     # time stamp columns. The instrument name can be derived from this and the 
@@ -568,9 +573,6 @@ if args.t and len(headerList) >= 2:
 have the following format:\n \
     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2 Value ... \n\
 and the timestamps may or may not be synchronized.')
-
-    print('**** Input Data ****')
-    print(df_source)
 
     # If there are files specified to merge, merge them with the input file before 
     # further processing. Since this file format has independent time/value pairs
@@ -707,15 +709,23 @@ Unexpected encoding can also cause this error.')
         
     # update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
+    print('**** Header List ****')
+    print(headerList)
     # sort the data by time
     df_source.sort_index(inplace=True)
+    
     # TODO: Make sure duplicate rows are handled.
     # Needed here or already taken care of below?
 
+    # Loop thru the header list. Get the instrument name, create a data frame for
+    # each instrument, get the timestamp to be a datetime and the value to be a
+    # float, create a list of instruments and an list of TsIdxData objects (one
+    # per instrument).  If the instrument name is duplicated, the data sets are
+    # merged.
     for idx in range(0, len(headerList), 2):
         # For each header entry, make instrument and timestamp column names.
         # Even indexes are timestamps, odd indexes are values.
-        # get the inst name, leaving off the bit after the last space, which is
+        # Get the inst name, leaving off the bit after the last space, which is
         # normally 'Time' or 'ValueY'
         # rpartition returns a tuple: first, separator, last. Use the first 
         # member as the tag name -- this allows tag names with spaces to be
@@ -773,17 +783,22 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         # data to an existing instrument object already in the object list.
         # If not, then append a new object with the new data to the name and
         # object lists.
-        try:
-            # get the index in the name list. If it is present, the instrument
-            # is already present. Append the data. If it isn't present, this 
-            # will throw, and we'll append a new instrument.
+        print('**** InstDataNames before check for "' + instName + '" ****')
+        print(instDataNames)
+        if instName in instDataNames:
+            # An instrument with the same name already exists. 
+            # Append this data to it
             idx = instDataNames.index(instName)
+            print('Inst in list at index ' + str(idx) + '. Appending data.')
+
             # Appending the data will apply previously specified value queries
             # and time filtering
-            instData[idx].appendData(df_valData)
-        except:
+            instData[idx].appendData(df_valData, 0) # don't ignore any rows
+            print(instData[idx])
+        else:
             # This instrument is not in the instrument list yet.  
             # Append it to the name list and the object list
+            print('Inst not yet seen. Appending new instrument to list of instruments.')
             instDataNames.append(instName)
             # Make an object with the instrument name, labels and data frame
             # instrument data object, and append it to the list.
@@ -1398,7 +1413,8 @@ Unexpected encoding can also cause this error.')
     # idx TimeStamp
     # [0] Tag 1 Value
     # ...
-    # [n] Tag n Value
+    # [n] Tag n Value,
+    # and the header row contains the tag names for the value columns.
 
     # Update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
@@ -1408,7 +1424,11 @@ Unexpected encoding can also cause this error.')
     # NOTE: This may be unnecessary
     df_source.sort_index(inplace=True)
 
-    # Loop thru the columns and make instrument objects.
+    # Loop thru the header list. Get the instrument name, create a data frame for
+    # each instrument, get the value to be a float, create a list of
+    # instruments and an list of TsIdxData objects (one per instrument).
+    # If the instrument name is duplicated, the data sets are
+    # merged.
     for idx in range(0, len(headerList)):
         instName = headerList[idx]
         # replace the spaces, hyphens, and periods with underscores
@@ -1465,8 +1485,9 @@ Unexpected encoding can also cause this error.')
 
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
-    print(instData)
-    quit()
+
+print(instData)
+quit()
 
 # **** Determine the earliest start time, the latest end time, and the minimum
 # frequency for the instruments. These will be used to generate the master time

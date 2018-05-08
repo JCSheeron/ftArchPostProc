@@ -352,7 +352,11 @@ The source data is unused, leaving the data set empty.\n ' )
                     # now the data type is correct, and forseen data errors are removed.
                     # Set the index to the timestamp column
                     self._df.set_index(self._tsName, inplace=True)
-                    
+                else:
+                    # The index is all set up (it is the correct name and is a datetime
+                    # TODO: We will want to round the timestamp and drop any duplicates.
+                    # The dups could be from rounding or from merging
+
                 # Make sure the index is sorted possible better performance later
                 self._df.sort_index(inplace=True)
 
@@ -421,7 +425,7 @@ The source data is unused, leaving the data set empty.\n ' )
                     print('    Frequency:', self._timeOffset)
 
     def __repr__(self):
-        outputMsg=  '{:13} {}'.format('Name: ', self._name + '\n')
+        outputMsg=  '{:13} {}'.format('\nName: ', self._name + '\n')
         if self.isEmpty: 
             outputMsg+= 'Contains no data!\n'
             outputMsg+= '{:13} {}'.format('Length: ', str(self.count) + '\n')
@@ -436,7 +440,8 @@ The source data is unused, leaving the data set empty.\n ' )
             outputMsg+= '{:13} {}'.format('Start Time: ', str(self.startTs) + '\n')
             outputMsg+= '{:13} {}'.format('End Time: ', str(self.endTs) + '\n')
             outputMsg+= '{:13} {}'.format('Period: ', str(self._timeOffset) + '\n')
-            outputMsg+= '{:13} {}'.format('Length: ', str(self.count) + '\n')
+            outputMsg+= '{:13} {}'.format('Length: ', str(self.count) + '\n\n')
+            outputMsg+= 'Data:' + self._df.to_string()
             return(outputMsg)
 
     def resample(self, resampleArg='S', stats='m'):
@@ -637,15 +642,12 @@ matches data frequency. Data unchanged. Frequency is ' + str(self._timeOffset))
         # row as data.
         #
         # Get the source data into a temp dataframe. Use member column names.
-        df_temp = pd.DataFrame(data=srcDf, columns=[self._tsName, self._yName])
+        df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
 
         # drop rows that should be ignored
         if 1 <= IgnoreFirstRows:
-            df_temp.drop(df_temp.index[0,IgnoreFirstRows])
+            df_temp.drop(df_temp.index[:IgnoreFirstRows], inplace=True)
 
-        print('**** Data to append ****')
-        print(df_temp)
-        quit()
         # change the value column to a float if needed
         if 'float64' != df_temp[self._yName].dtype:
             df_temp[self._yName] = df_temp[self._yName].astype('float',
