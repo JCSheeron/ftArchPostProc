@@ -11,7 +11,7 @@ from datetime import datetime, time
 from pandas.tseries.frequencies import to_offset
 from dateutil import parser as duparser
 
-# umerical manipulation libraries
+# numerical manipulation libraries
 import numpy as np
 import pandas as pd
 
@@ -724,10 +724,125 @@ the source data being merged.  Timestamps may be incorrect, and/or some rows may
         self._df = self._df.append(df_temp)
         return
 
-    def replaceData(srcDf):
+    def replaceData(self, srcDf):
         # TODO:  Implement
         # Enforce or coerce data into compatible structure
         print('    WARNING: repalceData() method not implemented. Data  unchanged.')
+        return
+
+    # Private member function to massage a dataframe:
+    # This function assumes a dataframe with at least two columns. It
+    # will try and turn one column into a timestamp index, and another it
+    # will try turn into a float value column. Before finishing:
+    #   The timestamp will be changed to a datetime (if needed)
+    #   The value will be turned into a float (if needed)
+    #   The timestamp will be rounded to milliseconds
+    #   The dataframe will be sorted by timestamp
+    #   Duplicate timestamps will be removed, and the last value will be the one used.
+    # Additional columns are ignored/unchanged, other than rows will removed 
+    # from the additional column where the corresponding value or timestamp is
+    # NaN/NaT, or the timestamp is a duplicate.
+    #
+    # The timestamp column must be a datetime or convertible to a datetime
+    # and either needs to be the index or a value column. Either way, it needs
+    # to be named the same as the string stored in self._tsName.
+    # The value column needs to be a float or convertible to a 
+    # float and needs to be named the same as the string stored in self._yName.
+    def __massageData(self, df_Massage):
+        # change the value column to a float if needed
+        if 'float64' != df_Massge[self._yName].dtype:
+            df_Massge[self._yName] = df_Massge[self._yName].astype('float',
+                                                                errors='ignore')
+        # If the index name is set to the tsName, and the index data type 
+        # is datetime, then the index is all set up. Otherwise make it so...
+        if self._tsName != df_Massge.index.name or 'datetime64[ns]' != df_Massge.index.dtype:
+            # The name and/or datatype of the index is not as needed.
+            # Reset and redo the index, changing the datatype if needed.
+            df_Massge.reset_index(inplace=True)
+            if 'datetime64[ns]' != df_Massge[self._tsName].dtype:
+                # For changing to timestamps, coerce option for errors is marking
+                # dates after midnight (next day) as NaT.
+                # Not sure why. Try it with raise, first, and you get
+                # all the values. Put it in a try block, just in case an error is
+                # raised.
+                try:
+                    df_Massge[self._tsName] = pd.to_datetime(df_Massge[self._tsName],
+                                                            errors='raise',
+                                                            box = True, 
+                                                            format=self._sourceTimeFormat,
+                                                            exact=False,
+                                                            #infer_datetime_format = True,
+                                                            origin = 'unix')
+                except:
+                    print('    WARNING: Problem converting some timestamps from \
+the source data being merged.  Timestamps may be incorrect, and/or some rows may be missing.')
+                    df_Massge[self._tsName] = pd.to_datetime(df_Massge[self._tsName],
+                                                            errors='coerce',
+                                                            box = True, 
+                                                            infer_datetime_format = True,
+                                                            origin = 'unix')
+            # Condition the data before creating the index
+            # get rid of any NaN and NaT timestamps. These can be from the
+            # original data or from invalid conversions to datetime
+            df_Massge.dropna(subset=[self._tsName], inplace=True)
+            # round the timestamp to the nearest ms. Unseen ns and
+            # fractional ms values are not always displayed, and can cause
+            # unexpected merge and up/downsample results
+            df_Massge[self._tsName] = df_Massge[self._tsName].dt.round('L')
+            # get rid of any duplicate timestamps as a result of rounding
+            df_Massge[self._tsName].drop_duplicates(subset=self._tsName,
+                                                   keep='last', inplace=True)
+            # now the data type is correct, and forseen data errors are removed.
+            # Set the index to the timestamp column
+            df_Massge.set_index(self._tsName, inplace=True)
+        else:
+            # The index is all set up (it is the correct name and is a datetime
+            # We still want to drop any NaN/NaT entries, round the timestamp,
+            # and drop any duplicates (from rounding/merging/source)
+            # just like we did above if we needed to set up the index.
+            
+            # since we need to do several operations, it seems easier to reset
+            # the index, do the mods, and then re-index. 
+            # NOTE: May need to rethink the re-index approach if re-index
+            # proves to be costly on large data sets.
+            # reset the index, but keep the column as a value
+            df_Massage.reset_index(drop=False, inplace=True)
+
+            # Now the index column is 
+            # drop any rows with NaN/NaT value(s), ignore other columns that may
+            # be present by specifying the subset of the two columns we know about
+            df_Massage.dropna(subset=[self._tsName, self._yName], inplace=True)
+            # round the timestamp to the nearest ms. Unseen ns and
+            # fractional ms values are not always displayed, and can cause
+            # unexpected merge and up/downsample results
+            df_Massge[self._tsName] = df_Massge[self._tsName].dt.round('L')
+            # get rid of any duplicate timestamps as a result of rounding
+            df_Massge[self._tsName].drop_duplicates(subset=self._tsName,
+                                                   keep='last', inplace=True)
+            # now the data type is correct, and forseen data errors are removed.
+            # Set the index to the timestamp column
+            df_Massge.set_index(self._tsName, inplace=True)
+
+            # TODO: Does this handle the index
+            df_Massage.dropna(axis=0, how = 'any')
+        # Make sure the index is sorted possible better performance later
+        df_Massge.sort_index(inplace=True)
+        # Apply the query string if one is specified.
+        # Replace "val" with the column name.
+        if self._vq != '':
+            queryStr = self._vq.replace("val", self._yName)
+            # try to run the query string, but ignore it on error
+            try:
+                df_Massge.query(queryStr, inplace = True)
+            except:
+                print('    WARNING: Invalid query string. Ignoring the \
+    specified query when appending data.')
+
+        # Now the timestamp is the index, so filter based on the specified
+        # start and end times.
+        # Non specified times will be None, so the filter still works as
+        # is. If both are none, no filtering is performed.
+        df_Massge = df_Massge.loc[self._startQuery : self._endQuery]
         return
 
     # read only properties
