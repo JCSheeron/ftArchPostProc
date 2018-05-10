@@ -748,7 +748,39 @@ the source data being merged.  Timestamps may be incorrect, and/or some rows may
     # to be named the same as the string stored in self._tsName.
     # The value column needs to be a float or convertible to a 
     # float and needs to be named the same as the string stored in self._yName.
+    #
+    # Exceptions raised:
+    #   NameError if value or timestamp column name cannot be found in the df.
+    #   ValueError if there is a conversion problem.
+
     def __massageData(self, df_Massage):
+        # verify the correct column and/or index names exist. If not raise a NameError
+        dfCols = df_Massage.columns
+        dfIndex = df_Massage.index.name
+        if not (self._yName in srcCols) or \
+                not (self._tsName in srcCols or self._tsName == srcIndex):
+                    # source data column names are not as needed. Raise a name error:
+            if not (self._yName in srcCols):
+                # value column name not found in the df. Raise a NameError
+                raise NameError('The cannot data can not be conditioned because \ 
+there is no column named "' + self._yName + '".')
+                except NameError as ne
+                    print(ne)
+                    print('The column names found in the data are:')
+                    print(dfCols)
+            
+            if not (self._tsName in srcCols or self._tsName == srcIndex):
+                # There is no index or value colum names the same as the timestamp
+                # name. Raise a NameError.
+                raise NameError('The cannot data can not be conditioned because \
+the index or a value column needs to be named "' + self._tsName + '".')
+                except NameError as ne
+                    print(ne)
+                    print('The column names found in the data are:')
+                    print(dfCols)
+                    print('The index is named: "' + dfIndex + '".')
+
+
         # change the value column to a float if needed
         if 'float64' != df_Massge[self._yName].dtype:
             df_Massge[self._yName] = df_Massge[self._yName].astype('float',
