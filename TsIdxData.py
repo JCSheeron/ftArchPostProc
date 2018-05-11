@@ -85,9 +85,10 @@ import pandas as pd
 #                       per above.
 #      
 #
-# In addition the data can be resampled.  Resampling makes the most sense when 
-# the original data has time stamps at regular intervals, and the interval needs
-# to be changed. If the data is being upsampled (increase the frequency),
+# In addition the data can be resampled, using the resample(args, stats) method.
+# Resampling makes the most sense when the original data has time stamps at 
+# regular intervals, and the interval needs# to be changed.
+# If the data is being upsampled (increase the frequency),
 # than values will be forward filled to populate gaps in the data. If the data
 # is being downsampled (decrease in frequency), then the specified stats will
 # be calculated on values that fall between those being sampled.
@@ -102,6 +103,10 @@ import pandas as pd
 # The values between this and the next sample point are thrown away.
 # For the other options, the intermediate values are used to calculate the
 # statistic.  Note: The stats parameter is ignored when upsampling.
+#
+# The member data can be appended to using the appendData(dataframe) method.
+#
+# The member data can be replaced using the replaceData(dataframe) method.
 #
 # The following read only properties are implemented
 #    name
@@ -134,12 +139,8 @@ import pandas as pd
 #     isEmpty
 #       boolean true if data frame is empty
 #
-# TODO: There is no way to append or replace data.  The appendData and 
-# replaceData methods need an implementation. Currently,
-# if a TsIdxData object is created without specifing a source data frame (df param)
-# then the object data will be an empty dataframe, and there is no way to populate
-# it.  
-# UPDATE: Append is implemented but not tested.
+# TODO: Test appendData method
+# TODO: Test replaceData method
 #
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
@@ -249,7 +250,20 @@ class TsIdxData(object):
         # make sure the source time format is a string
         self._sourceTimeFormat = str(sourceTimeFormat)
 
-        if df is None:
+        # Now deal with the data
+        # Get the specified data into the member data. 
+        # Trying to make a new dataframe allows something like a dataframe
+        # to be used (like a list, dict, or other dataframe.
+        # If it isn't possible to build a dataframe from what, then assign an 
+        # empty dataframe.
+        try:
+            self._df = pd.DataFrame(df)
+        except ValueError:
+            print('    WARNING: The data specified when building ' + self.name \
++ ' cannot be used to make a dataframe.  An empty dataframe is being used.')
+            self._df = None # so that an empty dataframe will be used below
+
+        if df is None or self._df is None:
             # No source specified ...
             # create an empty data frame
             # not resampling ...
@@ -270,159 +284,61 @@ class TsIdxData(object):
             self._timeOffset = np.NaN
         else:
             # Source data is specified ...
-            # It needs to have a value column named yName, and a value column
-            # or index named tsName. See if this is true before proceeding,
-            # and don't use data if not.
-            srcCols = df.columns
-            srcIndex = df.index.name
-            if not (self._yName in srcCols) or \
-                    not (self._tsName in srcCols or self._tsName == srcIndex):
-                # source data column names are not as needed. Print a msg and bail
-                print('TsIdxData constructor source data name problem for ' + self._name + '. \n \
-The source data needs to have a value column named "' + self._yName + '" and a value \n \
-or column or index named "' + self._tsName + '". This does not seem to be the case. \n \
-The source data is unused, leaving the data set empty.\n ' )
-                # create an empty data frame with the column names
-                self._df = pd.DataFrame(columns=[self._tsName, self._yName])
-                # force the columns to have the data types of datetime and float
-                self._df[self._yName] = self._df[self._yName].astype('float',
-                                                        errors='ignore')
+            # Use the member function to process it into the form we need.
+            __massageData()
+            # Use the member function to apply the filters
+            __filterData()
 
-                # force the timestamp to a datetime
-                # should not raise an error, as there is no data 
-                self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
-                                                        errors='coerce')
-                # set the timestamp as the index
-                self._df.set_index(self._tsName, inplace=True)
-
-                # set the other properties
-                self._timeOffset = np.NaN
-            else:
-                # The source data has the correct names. Continue.
-                # Capture the source data
-                self._df = pd.DataFrame(data=df)
-                # change the value column to a float if needed
-                if 'float64' != self._df[self._yName].dtype:
-                    self._df[self._yName] = self._df[self._yName].astype('float',
-                                                                        errors='ignore')
-                # get rid of Nan from the values (y-axis)
-                # not strictly necessary, but lack of NaN values tends to make
-                # follow on data analysis less problematic
-                self._df.dropna(subset=[self._yName], inplace=True)
+            # Get the inferred frequency of the index. Store this internally,
+            # and expose below as a property.  Sometimes the data has repeated
+            # timestamps, and infer_freq does not work.Try it, but if it comes up
+            # empty, try it manually
+            try:
+                # try the inferred frequency
+                inferFreq = pd.infer_freq(self._df.index)
+            except TypeError as te:
+                print('    Error: Timestamp column does not appear to be a datetime. \n \
+Cannot infer a frequency. Will try to do so manually by comparing the first few values.')
+                print(te)
+                inferFreq = None
+            except ValueError as ve: 
+                print('    Warning: There are not enough timestamps to infer a frequency. \n \
+Will try to do so manually by comparing the first few values.')
+                print(ve)
+                inferFreq = None
                 
-                # If the index name is set to the tsName, and the index data type 
-                # is datetime, then the index is all set up. Otherwise make it so...
-                if self._tsName != self._df.index.name or 'datetime64[ns]' != self._df.index.dtype:
-                    # The name and/or datatype of the index is not as needed.
-                    # Reset and redo the index, changing the datatype if needed.
-                    self._df.reset_index(inplace=True)
-                    if 'datetime64[ns]' != self._df[self._tsName].dtype:
-                        # For changing to timestamps, coerce option for errors is marking
-                        # dates after midnight (next day) as NaT.
-                        # Not sure why. Try it with raise, first, and you get
-                        # all the values. Put it in a try block, just in case an error is
-                        # raised.
-                        try:
-                            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
-                                                                    errors='raise',
-                                                                    box = True, 
-                                                                    format=self._sourceTimeFormat,
-                                                                    exact=False,
-                                                                    #infer_datetime_format = True,
-                                                                    origin = 'unix')
-                        except:
-                            print('    WARNING: Problem converting some timestamps from \
-    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
-                            self._df[self._tsName] = pd.to_datetime(self._df[self._tsName],
-                                                                    errors='coerce',
-                                                                    box = True, 
-                                                                    infer_datetime_format = True,
-                                                                    origin = 'unix')
-                    # Condition the data before creating the index
-                    # get rid of any NaN and NaT timestamps. These can be from the
-                    # original data or from invalid conversions to datetime
-                    self._df.dropna(subset=[self._tsName], inplace=True)
-                    # round the timestamp to the nearest ms. Unseen ns and
-                    # fractional ms values are not always displayed, and can cause
-                    # unexpected merge and up/downsample results
-                    self._df[self._tsName] = self._df[self._tsName].dt.round('L')
-                    # get rid of any duplicate timestamps as a result of rounding
-                    self._df[self._tsName].drop_duplicates(subset=self._tsName,
-                                                           keep='last', inplace=True)
-                    # now the data type is correct, and forseen data errors are removed.
-                    # Set the index to the timestamp column
-                    self._df.set_index(self._tsName, inplace=True)
+            # If that did not work, try to get it manually. When timestamps are
+            # repeated, it looks like the odd/even rows in that order are
+            # repeated.
+            if inferFreq is None or inferFreq == pd.Timedelta(0): 
+                print('    Warning: Data may have very few, skipped, missing, repeated or corrupted timestamps.\n \
+Determining sampling frequency manually.')
+                # Use 3 and 4 if possible, just in case there is
+                # something strange in the beginning. Otherwise, use entries 0
+                # and 1, or give up, and use 1 second.
+                if len(self._df.index) >= 4:
+                    inferFreq = pd.Timedelta((self._df.index[3] -
+                                              self._df.index[2]))
+                elif len(self._df.index) >= 2:
+                    inferFreq = pd.Timedelta((self._df.index[1] - self._df.index[0]))
                 else:
-                    # The index is all set up (it is the correct name and is a datetime
-                    # TODO: We will want to round the timestamp and drop any duplicates.
-                    # The dups could be from rounding or from merging
-
-                # Make sure the index is sorted possible better performance later
-                self._df.sort_index(inplace=True)
-
-                # Apply the query string if one is specified.
-                # Replace "val" with the column name.
-                if self._vq != '':
-                    queryStr = self._vq.replace("val", self._yName)
-                    # try to run the query string, but ignore it on error
-                    try:
-                        self._df.query(queryStr, inplace = True)
-                    except:
-                        print('    WARNING: Invalid query string. Ignoring the \
-    specified query.')
-
-                # Now the timestamp is the index, so filter based on the specified
-                # start and end times.
-                # Non specified times will be None, so the filter still works as
-                # is. If both are none, no filtering is performed.
-                self._df= self._df.loc[self._startQuery : self._endQuery]
-
-                # Get the inferred frequency of the index. Store this internally,
-                # and expose below as a property.  Sometimes the data has repeated
-                # timestamps, and infer_freq does not work.Try it, but if it comes up
-                # empty, try it manually
-                try:
-                    # try the inferred frequency
-                    inferFreq = pd.infer_freq(self._df.index)
-                except:
-                    inferFreq = None
-                
-                # If that did not work, try to get it manually. When timestamps are
-                # repeated, it looks like the odd/even rows in that order are
-                # repeated.
-                if inferFreq is None or inferFreq == pd.Timedelta(0): 
-                    print('    Data may have skipped, missing, repeated or corrupted timestamps.\n \
-   Determining sampling frequency manually.')
-                    # Use 3 and 4 if possible, just in case there is
-                    # something strange in the beginning. Otherwise, use entries 0
-                    # and 1, or give up, and use 1 second.
-                    if len(self._df.index) >= 4:
-                        inferFreq = pd.Timedelta((self._df.index[3] -
-                                                  self._df.index[2]))
-                    elif len(self._df.index) >= 2:
-                        inferFreq = pd.Timedelta((self._df.index[1] - self._df.index[0]))
-                    else:
-                        print('    WARNING: Not enough data to determine the \
-    data frequency. Using 1 sec.')
-                        inferFreq = pd.Timedelta('1S')
-
-                # At this point, there is value for inferred frequency,
-                # but there may be repeated times due to sub-second times being
-                # truncated.  If this happens, the time delta will be 0. Deal
-                # with it by forcing 1 second
-                if inferFreq == pd.Timedelta(0):
-                    print('    WARNING: Two rows have the same timestamp. \
-    Assuming a 1 second data frequency.')
+                    print('    WARNING: Not enough data to determine the \
+data frequency. Using 1 sec.')
                     inferFreq = pd.Timedelta('1S')
 
-                # Frequency is ready. Convert it and store it as a time offset.
-                self._timeOffset = to_offset(inferFreq)
+            # At this point, there is value for inferred frequency,
+            # but there may be repeated times due to sub-second times being
+            # truncated.  If this happens, the time delta will be 0. Deal
+            # with it by forcing 1 second
+            if inferFreq == pd.Timedelta(0):
+                print('    WARNING: Two rows have the same timestamp. \
+Assuming a 1 second data frequency.')
+                inferFreq = pd.Timedelta('1S')
 
-                # Print interesting stuff as long as length > 0
-                if len(self._df.index) > 0:
-                    print('    Start Time:', self._df.index[0])
-                    print('    End Time:', self._df.index[-1])
-                    print('    Frequency:', self._timeOffset)
+            # Frequency is ready. Convert it and store it as a time offset.
+            self._timeOffset = to_offset(inferFreq)
+
+        # ctor all done!
 
     def __repr__(self):
         outputMsg=  '{:13} {}'.format('\nName: ', self._name + '\n')
@@ -634,103 +550,74 @@ matches data frequency. Data unchanged. Frequency is ' + str(self._timeOffset))
            
     def appendData(self, srcDf, IgnoreFirstRows=1):
         # This function takes a source data frame (srcDf) and appends it to the 
-        # member data frame. The column names of the source data are ignored, but 
+        # member data frame, as long as srcDf is a dataframe.
+        # The column names of the source data are ignored, but 
         # it is expected that index is or can be converted to a datetime, and the
         # values are or can be converted to a float.  Use IgnoreFirstRows to set
         # how many rows to throw away before merging the data. Default is 1, so as
         # to ignore a header row. Setting IgnoreFirstRows to 0 will treat every
         # row as data.
-        #
+        
         # Get the source data into a temp dataframe. Use member column names.
-        df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
+        # This allows something like a dataframe to be used (like a list, dict,
+        # or other dataframe. If it isn't possible to build a dataframe from what
+        # was passed in, print a message and punt.
+        try:
+            df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
+        except ValueError:
+            print('The data specified for the appendData function could not be \
+turned into a dataframe. Nothing appended.')
+            return
 
         # drop rows that should be ignored
         if 1 <= IgnoreFirstRows:
             df_temp.drop(df_temp.index[:IgnoreFirstRows], inplace=True)
 
-        # change the value column to a float if needed
-        if 'float64' != df_temp[self._yName].dtype:
-            df_temp[self._yName] = df_temp[self._yName].astype('float',
-                                                                errors='ignore')
-        # get rid of Nan from the values (y-axis)
-        # not strictly necessary, but lack of NaN values tends to make
-        # follow on data analysis less problematic
-        df_temp.dropna(subset=[self._yName], inplace=True)
-        
-        # If the index name is set to the tsName, and the index data type 
-        # is datetime, then the index is all set up. Otherwise make it so...
-        if self._tsName != df_temp.index.name or 'datetime64[ns]' != df_temp.index.dtype:
-            # The name and/or datatype of the index is not as needed.
-            # Reset and redo the index, changing the datatype if needed.
-            df_temp.reset_index(inplace=True)
-            if 'datetime64[ns]' != df_temp[self._tsName].dtype:
-                # For changing to timestamps, coerce option for errors is marking
-                # dates after midnight (next day) as NaT.
-                # Not sure why. Try it with raise, first, and you get
-                # all the values. Put it in a try block, just in case an error is
-                # raised.
-                try:
-                    df_temp[self._tsName] = pd.to_datetime(df_temp[self._tsName],
-                                                            errors='raise',
-                                                            box = True, 
-                                                            format=self._sourceTimeFormat,
-                                                            exact=False,
-                                                            #infer_datetime_format = True,
-                                                            origin = 'unix')
-                except:
-                    print('    WARNING: Problem converting some timestamps from \
-the source data being merged.  Timestamps may be incorrect, and/or some rows may be missing.')
-                    df_temp[self._tsName] = pd.to_datetime(df_temp[self._tsName],
-                                                            errors='coerce',
-                                                            box = True, 
-                                                            infer_datetime_format = True,
-                                                            origin = 'unix')
-            # Condition the data before creating the index
-            # get rid of any NaN and NaT timestamps. These can be from the
-            # original data or from invalid conversions to datetime
-            df_temp.dropna(subset=[self._tsName], inplace=True)
-            # round the timestamp to the nearest ms. Unseen ns and
-            # fractional ms values are not always displayed, and can cause
-            # unexpected merge and up/downsample results
-            df_temp[self._tsName] = df_temp[self._tsName].dt.round('L')
-            # get rid of any duplicate timestamps as a result of rounding
-            df_temp[self._tsName].drop_duplicates(subset=self._tsName,
-                                                   keep='last', inplace=True)
-            # now the data type is correct, and forseen data errors are removed.
-            # Set the index to the timestamp column
-            df_temp.set_index(self._tsName, inplace=True)
-            
-        # Make sure the index is sorted possible better performance later
-        df_temp.sort_index(inplace=True)
-        # Apply the query string if one is specified.
-        # Replace "val" with the column name.
-        if self._vq != '':
-            queryStr = self._vq.replace("val", self._yName)
-            # try to run the query string, but ignore it on error
-            try:
-                df_temp.query(queryStr, inplace = True)
-            except:
-                print('    WARNING: Invalid query string. Ignoring the \
-    specified query when appending data.')
-
-        # Now the timestamp is the index, so filter based on the specified
-        # start and end times.
-        # Non specified times will be None, so the filter still works as
-        # is. If both are none, no filtering is performed.
-        df_temp = df_temp.loc[self._startQuery : self._endQuery]
+        # condition and filter the passed in dataframe
+        __massageData(df_temp)
+        __filterData(df_temp)
 
         # now merge the conditioned data with the member data, along the index
         # (timestamp) axis
         self._df = self._df.append(df_temp)
         return
 
+    # drop existing data and replace it with the specified dataframe, as long
+    # as the passed in thing is a dataframe, otherwise do nothing.
     def replaceData(self, srcDf):
-        # TODO:  Implement
-        # Enforce or coerce data into compatible structure
-        print('    WARNING: repalceData() method not implemented. Data  unchanged.')
+        # This function takes a source data frame (srcDf) and replaces the 
+        # member dataframe with it, as long as srcDf is a dataframe.
+        # The column names of the source data are ignored, but 
+        # it is expected that index is or can be converted to a datetime, and the
+        # values are or can be converted to a float.  Use IgnoreFirstRows to set
+        # how many rows to throw away before merging the data. Default is 1, so as
+        # to ignore a header row. Setting IgnoreFirstRows to 0 will treat every
+        # row as data.
+        
+        # Get the source data into a temp dataframe. Use member column names.
+        # This allows something like a dataframe to be used (like a list, dict,
+        # or other dataframe. If it isn't possible to build a dataframe from what
+        # was passed in, print a message and punt.
+        try:
+            df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
+        except ValueError:
+            print('The data specified for the replaceData function could not be \
+turned into a dataframe. The data was not replaced.')
+            return
+
+        # drop rows that should be ignored
+        if 1 <= IgnoreFirstRows:
+            df_temp.drop(df_temp.index[:IgnoreFirstRows], inplace=True)
+
+        # condition and filter the passed in dataframe
+        __massageData(df_temp)
+        __filterData(df_temp)
+
+        # now replace the member data.
+        self._df = pd.DataFrame(data=df_temp)
         return
 
-    # Private member function to massage a dataframe:
+    # Private member function to massage a specified dataframe:
     # This function assumes a dataframe with at least two columns. It
     # will try and turn one column into a timestamp index, and another it
     # will try turn into a float value column. Before finishing:
@@ -751,130 +638,191 @@ the source data being merged.  Timestamps may be incorrect, and/or some rows may
     #
     # Exceptions raised:
     #   NameError if value or timestamp column name cannot be found in the df.
-    #   ValueError if there is a conversion problem.
+    #   TypeError if a dataframe is not specified for df
 
-    def __massageData(self, df_Massage):
+    def __massageData(self, df=self._df):
+        # make sure a dataframe, or something that can be converted to a
+        # dataframe is passed in, otherwise leave.
+        try: 
+            df_temp = pd.DataFrame(df)
+        except TypeError as te:
+            print('Error Processing ' + self._name + '.\n \
+The private member function __massageData was not passed anything that can \
+be converted to a dataframe. No data was changed.')
+            raise te  # raise for the calling section
+
         # verify the correct column and/or index names exist. If not raise a NameError
-        dfCols = df_Massage.columns
-        dfIndex = df_Massage.index.name
+        dfCols = df_temp.columns
+        dfIndex = df_temp.index.name
         if not (self._yName in srcCols) or \
                 not (self._tsName in srcCols or self._tsName == srcIndex):
                     # source data column names are not as needed. Raise a name error:
-            if not (self._yName in srcCols):
-                # value column name not found in the df. Raise a NameError
-                raise NameError('The cannot data can not be conditioned because \ 
-there is no column named "' + self._yName + '".')
-                except NameError as ne
+            try:
+                if not (self._yName in srcCols):
+                # value column name not found in the df_temp. Raise a NameError
+                    raise NameError('Error Processing ' + self._name + '.\n \
+The data cannot be processed because a column named "' + self._yName + '" is \
+needed. It is used as the value column.')
+            except NameError as ne:
                     print(ne)
                     print('The column names found in the data are:')
                     print(dfCols)
             
-            if not (self._tsName in srcCols or self._tsName == srcIndex):
-                # There is no index or value colum names the same as the timestamp
-                # name. Raise a NameError.
-                raise NameError('The cannot data can not be conditioned because \
-the index or a value column needs to be named "' + self._tsName + '".')
-                except NameError as ne
-                    print(ne)
-                    print('The column names found in the data are:')
-                    print(dfCols)
-                    print('The index is named: "' + dfIndex + '".')
+            try:
+                if not (self._tsName in srcCols or self._tsName == srcIndex):
+                    # There is no index or value column name the same as the timestamp
+                    # name. Raise a NameError.
+                    raise NameError('Error Processing ' + self._name + '.\n \
+The data cannot be processed because the index or a value column needs to be \
+named "' + self._tsName + '". It is used as the timestamp.')
+            except NameError as ne:
+                print(ne)
+                print('The column names found in the data are:')
+                print(dfCols)
+                print('The index is named: "' + dfIndex + '".')
 
-
-        # change the value column to a float if needed
-        if 'float64' != df_Massge[self._yName].dtype:
-            df_Massge[self._yName] = df_Massge[self._yName].astype('float',
+        # At this point the column names are as needed. The timestamp may be a 
+        # value column or the index.
+        #
+        # Change the value column to a float if needed. Issue a warning, but 
+        # do the best conversion possible in any event.
+        if 'float64' != df_temp[self._yName].dtype:
+            try:
+                df_temp[self._yName] = df_temp[self._yName].astype('float',
+                                                                errors='raise')
+            except ValueError as ve:
+                print('Warning: There was a problem converting at least one \
+value into a float. The conversion did the best conversion possible.')
+                print(ve)
+                df_temp[self._yName] = df_temp[self._yName].astype('float',
                                                                 errors='ignore')
-        # If the index name is set to the tsName, and the index data type 
-        # is datetime, then the index is all set up. Otherwise make it so...
-        if self._tsName != df_Massge.index.name or 'datetime64[ns]' != df_Massge.index.dtype:
-            # The name and/or datatype of the index is not as needed.
-            # Reset and redo the index, changing the datatype if needed.
-            df_Massge.reset_index(inplace=True)
-            if 'datetime64[ns]' != df_Massge[self._tsName].dtype:
-                # For changing to timestamps, coerce option for errors is marking
-                # dates after midnight (next day) as NaT.
-                # Not sure why. Try it with raise, first, and you get
-                # all the values. Put it in a try block, just in case an error is
-                # raised.
-                try:
-                    df_Massge[self._tsName] = pd.to_datetime(df_Massge[self._tsName],
-                                                            errors='raise',
-                                                            box = True, 
-                                                            format=self._sourceTimeFormat,
-                                                            exact=False,
-                                                            #infer_datetime_format = True,
-                                                            origin = 'unix')
-                except:
-                    print('    WARNING: Problem converting some timestamps from \
-the source data being merged.  Timestamps may be incorrect, and/or some rows may be missing.')
-                    df_Massge[self._tsName] = pd.to_datetime(df_Massge[self._tsName],
-                                                            errors='coerce',
-                                                            box = True, 
-                                                            infer_datetime_format = True,
-                                                            origin = 'unix')
-            # Condition the data before creating the index
-            # get rid of any NaN and NaT timestamps. These can be from the
-            # original data or from invalid conversions to datetime
-            df_Massge.dropna(subset=[self._tsName], inplace=True)
-            # round the timestamp to the nearest ms. Unseen ns and
-            # fractional ms values are not always displayed, and can cause
-            # unexpected merge and up/downsample results
-            df_Massge[self._tsName] = df_Massge[self._tsName].dt.round('L')
-            # get rid of any duplicate timestamps as a result of rounding
-            df_Massge[self._tsName].drop_duplicates(subset=self._tsName,
-                                                   keep='last', inplace=True)
-            # now the data type is correct, and forseen data errors are removed.
-            # Set the index to the timestamp column
-            df_Massge.set_index(self._tsName, inplace=True)
-        else:
-            # The index is all set up (it is the correct name and is a datetime
-            # We still want to drop any NaN/NaT entries, round the timestamp,
-            # and drop any duplicates (from rounding/merging/source)
-            # just like we did above if we needed to set up the index.
-            
-            # since we need to do several operations, it seems easier to reset
-            # the index, do the mods, and then re-index. 
-            # NOTE: May need to rethink the re-index approach if re-index
-            # proves to be costly on large data sets.
-            # reset the index, but keep the column as a value
-            df_Massage.reset_index(drop=False, inplace=True)
 
-            # Now the index column is 
-            # drop any rows with NaN/NaT value(s), ignore other columns that may
-            # be present by specifying the subset of the two columns we know about
-            df_Massage.dropna(subset=[self._tsName, self._yName], inplace=True)
-            # round the timestamp to the nearest ms. Unseen ns and
-            # fractional ms values are not always displayed, and can cause
-            # unexpected merge and up/downsample results
-            df_Massge[self._tsName] = df_Massge[self._tsName].dt.round('L')
-            # get rid of any duplicate timestamps as a result of rounding
-            df_Massge[self._tsName].drop_duplicates(subset=self._tsName,
-                                                   keep='last', inplace=True)
-            # now the data type is correct, and forseen data errors are removed.
-            # Set the index to the timestamp column
-            df_Massge.set_index(self._tsName, inplace=True)
+        # As an intermediate step, we want the df_temp to have the timestamp as a 
+        # datetime value column (not the index) so we can more easily drop dups,
+        # round time, etc.  The following matrix is used to decide what to do
+        # ----------------------------------------------------------------------------
+        # idx name      |col name   |           |
+        # matches       |matches    |datetype is|
+        # self._tsName  |self._yName|datetime   |action
+        # ----------------------------------------------------------------------------
+        # No            | No        | don't care| Delt with above. Not poss. here
+        # ----------------------------------------------------------------------------
+        # Yes           | No        | No        | Reset index to a val col
+        #               |           |           | Change datatype to datetime
+        # ----------------------------------------------------------------------------
+        # Yes           | No        | Yes       | Reset index to val col
+        # ----------------------------------------------------------------------------
+        # Yes           | Yes       | No        | Drop col
+        #               |           |           | Reset index to a val col
+        #               |           |           | Change datatype to datetime
+        # ----------------------------------------------------------------------------
+        # Yes           | Yes       | Yes       | Drop col
+        #               |           |           | Reset index to a val col
+        # ----------------------------------------------------------------------------
+        # No            | Yes       | No        | Change datatype to datetime
+        # ----------------------------------------------------------------------------
+        # No            | Yes       | Yes       | No action needed here
+        # ----------------------------------------------------------------------------
+      
+        # See if there is an index and column that match the timestamp name.
+        # If there is, print a message, and drop the column.
+        if self._tsName == df_temp.index.name and (self._tsName in df_temp.cols):
+            print('Processing ' + self._name + '.  The index and a value column \
+both match the timestamp name "' + self._tsName + '". Dropping the column, \
+and keeping the index.' )
+            df_temp.drop(columns=[self._tsName], inplace=True, errors='ignore')
 
-            # TODO: Does this handle the index
-            df_Massage.dropna(axis=0, how = 'any')
-        # Make sure the index is sorted possible better performance later
-        df_Massge.sort_index(inplace=True)
+        # Now see if the index name matches the timestamp name. If it does,
+        # reset the index so the indexed timestamp becomes a normal value column.
+        if self._tsName == df_temp.index.name:
+            df_temp.reset_index(drop=False, inplace=True)
+
+        # Now there is a timestamp value column. See if it is the correct datatype.
+        # Convert it if needed.
+        if 'datetime64[ns]' != df_temp[self._tsName].dtype:
+            try:
+                # For changing to timestamps, coerce option for errors mayh  mark
+                # some dates as NaT.
+                # Try it with raise first and then resort to coerce if needed.
+                df_temp[self._tsName] = pd.to_datetime(df_temp[self._tsName],
+                                                        errors='raise',
+                                                        box = True, 
+                                                        format=self._sourceTimeFormat,
+                                                        exact=False,
+                                                        #infer_datetime_format = True,
+                                                        origin = 'unix')
+            except ValueError as ve:
+                print('    WARNING: Processing ' + self._name + '. There was \
+a problem converting some timestamps.Timestamps may be incorrect, and/or some \
+rows may be missing.')
+                print(ve)
+                df_temp[self._tsName] = pd.to_datetime(df_temp[self._tsName],
+                                                    errors='coerce',
+                                                    box = True, 
+                                                    infer_datetime_format = True,
+                                                    origin = 'unix')
+                    
+        # Now the column names and data types are correct.    
+        # Condition the data and (re)index it.
+        # Get rid of any NaN/NaT values in either column. These can be from the
+        # original data or from invalid conversions to float or datetime.
+        df_temp.dropna(subset=[self._tsName, self._yName], how='any', inplace=True)
+        # Rround the timestamp to the nearest ms. Unseen ns and
+        # fractional ms values are not always displayed, and can cause
+        # unexpected merge and up/downsample results.
+        try:
+            df_temp[self._tsName] = df_temp[self._tsName].dt.round('L')
+        except ValueError as ve:
+            print('    WARNING: Timestamp cannot be rounded.')
+            print(ve)
+
+        # Get rid of any duplicate timestamps. Done after rounding in case rouding
+        # introduced dups.
+        df_temp[self._tsName].drop_duplicates(subset=self._tsName,
+                                                keep='last', inplace=True)
+
+        # Now the data type is correct, and foreseen data errors are removed.
+        # Set the index to the timestamp column and sort it
+        df_temp.set_index(self._tsName, inplace=True)
+        df_temp.sort_index(inplace=True)
+
+        # All done. Data in indexed by timestamp, and there is a correctly 
+        # named value column.  There are no NaN/NaT values, timestamps have been 
+        # rounded to mSec, and there are no duplicate timestamps.
+        # Set the specified dataframe to the massaged data
+        df = df_temp
+        return
+
+    # private member function to apply the value query and the timestamp filter
+    def __filterData(self, df=self._df):
+        # make sure a dataframe is passed in
+        if not isinstance(df, pd.DataFrame):
+            try:
+                raise TypeError('Error Processing ' + self._name + '.\n \
+The private member function __filterData was not passed a pandas dataframe. \
+Nothing was filtered.')
+            except TypeError as te:
+                print(te)
+                raise te
+                
+                
+
         # Apply the query string if one is specified.
         # Replace "val" with the column name.
         if self._vq != '':
             queryStr = self._vq.replace("val", self._yName)
             # try to run the query string, but ignore it on error
             try:
-                df_Massge.query(queryStr, inplace = True)
-            except:
+                df.query(queryStr, inplace = True)
+            except ValueError:
                 print('    WARNING: Invalid query string. Ignoring the \
-    specified query when appending data.')
+specified query when appending data.')
 
-        # Now the timestamp is the index, so filter based on the specified
+        # Timestamp is the index, so filter based on the specified
         # start and end times.
         # Non specified times will be None, so the filter still works as
         # is. If both are none, no filtering is performed.
-        df_Massge = df_Massge.loc[self._startQuery : self._endQuery]
+        df = df.loc[self._startQuery : self._endQuery]
         return
 
     # read only properties
