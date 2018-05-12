@@ -195,9 +195,10 @@ class TsIdxData(object):
                                             box=True,
                                             infer_datetime_format=True,
                                             origin='unix')
-                except:
+                except (ValueError, OverflowError) as voe:
                     # not convertable ... invalid ... ignore
                     print('    WARNING: Invalid start query. Ignoring.')
+                    print(voe)
                     self._startQuery = None
             else:
                 # no need to convert
@@ -227,9 +228,10 @@ class TsIdxData(object):
                                                     box=True,
                                                     infer_datetime_format=True,
                                                     origin='unix')
-                except:
+                except (ValueError, OverflowError) as voe:
                     # not convertable ... invalid ... ignore
                     print('    WARNING: Invalid end query. Ignoring.')
+                    print(voe)
                     self._endQuery = None
             else:
                 # no need to convert. Update the member
@@ -258,13 +260,14 @@ class TsIdxData(object):
         # empty dataframe.
         try:
             self._df = pd.DataFrame(df)
-        except ValueError:
+        except ValueError as ve:
             print('    WARNING: The data specified when building ' + self.name \
 + ' cannot be used to make a dataframe.  An empty dataframe is being used.')
+            print(ve)
             self._df = None # so that an empty dataframe will be used below
 
         if df is None or self._df is None:
-            # No source specified ...
+            # No (valid) source specified ...
             # create an empty data frame
             # not resampling ...
             # create an empty data frame with the column names
@@ -297,48 +300,49 @@ class TsIdxData(object):
                 # try the inferred frequency
                 inferFreq = pd.infer_freq(self._df.index)
             except TypeError as te:
-                print('    Error: Timestamp column does not appear to be a datetime. \n \
+                print('    WARNING: Timestamp column does not appear to be a datetime. \n \
 Cannot infer a frequency. Will try to do so manually by comparing the first few values.')
                 print(te)
                 inferFreq = None
             except ValueError as ve: 
-                print('    Warning: There are not enough timestamps to infer a frequency. \n \
+                print('    WARNING: There are not enough timestamps to infer a frequency. \n \
 Will try to do so manually by comparing the first few values.')
                 print(ve)
                 inferFreq = None
-                
-            # If that did not work, try to get it manually. When timestamps are
-            # repeated, it looks like the odd/even rows in that order are
-            # repeated.
-            if inferFreq is None or inferFreq == pd.Timedelta(0): 
-                print('    Warning: Data may have very few, skipped, missing, repeated or corrupted timestamps.\n \
+            finally:
+                # Try to get an inferred freq if the above did not work
+                # If that did not work, try to get it manually. When timestamps are
+                # repeated, it looks like the odd/even rows in that order are
+                # repeated.
+                if inferFreq is None or inferFreq == pd.Timedelta(0): 
+                    print('    WARNING: Data may have very few, skipped, missing, repeated or corrupted timestamps.\n \
 Determining sampling frequency manually.')
-                # Use 3 and 4 if possible, just in case there is
-                # something strange in the beginning. Otherwise, use entries 0
-                # and 1, or give up, and use 1 second.
-                if len(self._df.index) >= 4:
-                    inferFreq = pd.Timedelta((self._df.index[3] -
-                                              self._df.index[2]))
-                elif len(self._df.index) >= 2:
-                    inferFreq = pd.Timedelta((self._df.index[1] - self._df.index[0]))
-                else:
-                    print('    WARNING: Not enough data to determine the \
+                    # Use 3 and 4 if possible, just in case there is
+                    # something strange in the beginning. Otherwise, use entries 0
+                    # and 1, or give up, and use 1 second.
+                    if len(self._df.index) >= 4:
+                        inferFreq = pd.Timedelta((self._df.index[3] -
+                                                  self._df.index[2]))
+                    elif len(self._df.index) >= 2:
+                        inferFreq = pd.Timedelta((self._df.index[1] - self._df.index[0]))
+                    else:
+                        print('    WARNING: Not enough data to determine the \
 data frequency. Using 1 sec.')
+                        inferFreq = pd.Timedelta('1S')
+
+                # At this point, there is value for inferred frequency,
+                # but there may be repeated times due to sub-second times being
+                # truncated.  If this happens, the time delta will be 0. Deal
+                # with it by forcing 1 second
+                if inferFreq == pd.Timedelta(0):
+                    print('    WARNING: Two rows have the same timestamp. \
+Assuming a 1 second data frequency.')
                     inferFreq = pd.Timedelta('1S')
 
-            # At this point, there is value for inferred frequency,
-            # but there may be repeated times due to sub-second times being
-            # truncated.  If this happens, the time delta will be 0. Deal
-            # with it by forcing 1 second
-            if inferFreq == pd.Timedelta(0):
-                print('    WARNING: Two rows have the same timestamp. \
-Assuming a 1 second data frequency.')
-                inferFreq = pd.Timedelta('1S')
+                # Frequency is ready. Convert it and store it as a time offset.
+                self._timeOffset = to_offset(inferFreq)
 
-            # Frequency is ready. Convert it and store it as a time offset.
-            self._timeOffset = to_offset(inferFreq)
-
-        # ctor all done!
+            # ctor all done!
 
     def __repr__(self):
         outputMsg=  '{:13} {}'.format('\nName: ', self._name + '\n')
@@ -389,9 +393,10 @@ specified. Using 1 Second.')
         else:
             try:
                 resampleTo = to_offset(resampleArg)
-            except:
+            except ValueError as ve:
                 print('    WARNING: ' + self._name + ': Invalid resample \
 period specified. Using 1 second.')
+                print(ve)
                 resampleTo = to_offset('S')
 
         if resampleTo < self._timeOffset:
@@ -432,10 +437,10 @@ Set "stats" to an empty string ("") or "None" to eliminate this warning.\n')
                 self._df = dfResample
                 del dfResample
                 return
-            except:
+            except ValueError as ve:
                 print('    WARNING: ' + self._name + ': Unable to resample \
 data. Data unchanged. Frequency is ' + str(self._timeOffset))
-                print('    Error: ', sys.exc_info())
+                print(ve)
                 return
         elif resampleTo > self._timeOffset:
             # Data will be downsampled. We'll have more data than rows.
@@ -537,10 +542,10 @@ data. Data unchanged. Frequency is ' + str(self._timeOffset))
                 self._df = dfResample
                 del dfResample
                 return
-            except:
+            except ValueError as ve:
                 print('    WARNING: ' + self._name + ': Unable to resample \
 data. Data unchanged. Frequency is ' + str(self._timeOffset))
-                print('    Error: ', sys.exc_info())
+                print(ve)
                 return
         else:
             # resampling not needed. Specified freq matches data already
@@ -565,7 +570,7 @@ matches data frequency. Data unchanged. Frequency is ' + str(self._timeOffset))
         try:
             df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
         except ValueError:
-            print('The data specified for the appendData function could not be \
+            print('    WARNING: The data specified for the appendData function could not be \
 turned into a dataframe. Nothing appended.')
             return
 
@@ -601,7 +606,7 @@ turned into a dataframe. Nothing appended.')
         try:
             df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
         except ValueError:
-            print('The data specified for the replaceData function could not be \
+            print('    WARNING: The data specified for the replaceData function could not be \
 turned into a dataframe. The data was not replaced.')
             return
 
@@ -646,10 +651,11 @@ turned into a dataframe. The data was not replaced.')
         try: 
             df_temp = pd.DataFrame(df)
         except TypeError as te:
-            print('Error Processing ' + self._name + '.\n \
+            print('    ERROR Processing ' + self._name + '.\n \
 The private member function __massageData was not passed anything that can \
 be converted to a dataframe. No data was changed.')
-            raise te  # raise for the calling section
+            print(te)
+            raise te
 
         # verify the correct column and/or index names exist. If not raise a NameError
         dfCols = df_temp.columns
@@ -660,19 +666,20 @@ be converted to a dataframe. No data was changed.')
             try:
                 if not (self._yName in srcCols):
                 # value column name not found in the df_temp. Raise a NameError
-                    raise NameError('Error Processing ' + self._name + '.\n \
+                    raise NameError('    ERROR Processing ' + self._name + '.\n \
 The data cannot be processed because a column named "' + self._yName + '" is \
 needed. It is used as the value column.')
             except NameError as ne:
                     print(ne)
                     print('The column names found in the data are:')
                     print(dfCols)
+                    raise ne
             
             try:
                 if not (self._tsName in srcCols or self._tsName == srcIndex):
                     # There is no index or value column name the same as the timestamp
                     # name. Raise a NameError.
-                    raise NameError('Error Processing ' + self._name + '.\n \
+                    raise NameError('    ERROR Processing ' + self._name + '.\n \
 The data cannot be processed because the index or a value column needs to be \
 named "' + self._tsName + '". It is used as the timestamp.')
             except NameError as ne:
@@ -680,6 +687,7 @@ named "' + self._tsName + '". It is used as the timestamp.')
                 print('The column names found in the data are:')
                 print(dfCols)
                 print('The index is named: "' + dfIndex + '".')
+                raise ne
 
         # At this point the column names are as needed. The timestamp may be a 
         # value column or the index.
@@ -691,7 +699,7 @@ named "' + self._tsName + '". It is used as the timestamp.')
                 df_temp[self._yName] = df_temp[self._yName].astype('float',
                                                                 errors='raise')
             except ValueError as ve:
-                print('Warning: There was a problem converting at least one \
+                print('    WARNING: There was a problem converting at least one \
 value into a float. The conversion did the best conversion possible.')
                 print(ve)
                 df_temp[self._yName] = df_temp[self._yName].astype('float',
@@ -798,7 +806,7 @@ rows may be missing.')
         # make sure a dataframe is passed in
         if not isinstance(df, pd.DataFrame):
             try:
-                raise TypeError('Error Processing ' + self._name + '.\n \
+                raise TypeError('    ERROR Processing ' + self._name + '.\n \
 The private member function __filterData was not passed a pandas dataframe. \
 Nothing was filtered.')
             except TypeError as te:
