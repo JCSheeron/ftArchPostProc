@@ -47,9 +47,10 @@ import pandas as pd
 #
 #   valueQuery -- Query string used to filter the dataset.
 #                 Default is empty, so nothing is filtered out. Use "val" to
-#                 represent the process value(s). For example, to filter out
-#                 all values < 0 or > 100, you want to keep everything else,
-#                 so the filter string would be: "val >= 0 and val <= 100".
+#                 represent the process value(s). Use "==" for an equality test.
+#                 For example, to filter out all values < 0 or > 100, you want 
+#                 to keep everything else,so the filter string would be:
+#                   "val >= 0 and val <= 100".
 #
 #   startQuery -- Datetime string used to filter the dataset.  Data timestamped
 #                 before this time will be filtered out. The default is empty,
@@ -61,7 +62,7 @@ import pandas as pd
 #
 #   sourceTimeFormat -- Specify the time format of the source data timestamp.
 #                       If nothing is specified, the value defaults to
-#                       "%m/%d/%Y %I:%M:%S %p". A string using the following
+#                       "%m/%d/%Y %H:%M:%S.%f". A string using the following
 #                       symbolic placeholders is used to specify the format: 
 #                           %m minutes, %d days, %Y 4 digit year, 
 #                           %y two digit year, %H hours (24hr format),
@@ -145,7 +146,7 @@ import pandas as pd
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
             valueQuery=None, startQuery=None, endQuery=None,
-            sourceTimeFormat='%m/%d/%Y %I:%M:%S %p'):
+            sourceTimeFormat='%m/%d/%Y %H:%M:%S.%f'):
         self._name = str(name) # use the string version
 
         # default x-axis (timestamp) label to 'timestamp' if nothing is specified
@@ -288,9 +289,10 @@ class TsIdxData(object):
         else:
             # Source data is specified ...
             # Use the member function to process it into the form we need.
-            __massageData()
+            self._df = pd.DataFrame(columns=[self._tsName, self._yName])
+            self._df = self.__massageData(srcDf=df)
             # Use the member function to apply the filters
-            __filterData()
+            self._df = self.__filterData()
 
             # Get the inferred frequency of the index. Store this internally,
             # and expose below as a property.  Sometimes the data has repeated
@@ -570,26 +572,30 @@ matches data frequency. Data unchanged. Frequency is ' + str(self._timeOffset))
         try:
             df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
         except ValueError:
-            print('    WARNING: The data specified for the appendData function could not be \
-turned into a dataframe. Nothing appended.')
+            print('    WARNING: The data specified for the appendData function \
+could not be turned into a dataframe. Nothing appended.')
             return
 
         # drop rows that should be ignored
         if 1 <= IgnoreFirstRows:
             df_temp.drop(df_temp.index[:IgnoreFirstRows], inplace=True)
 
+        # now merge the conditioned data with the member data, along the index
+        # (timestamp) axis
+        df_temp = self._df.append(df_temp)
+
         # condition and filter the passed in dataframe
-        __massageData(df_temp)
-        __filterData(df_temp)
+        self.__massageData(df_temp)
+        self.__filterData(df_temp)
 
         # now merge the conditioned data with the member data, along the index
         # (timestamp) axis
-        self._df = self._df.append(df_temp)
+        df_temp = self._df.append(df_temp)
         return
 
     # drop existing data and replace it with the specified dataframe, as long
     # as the passed in thing is a dataframe, otherwise do nothing.
-    def replaceData(self, srcDf):
+    def replaceData(self, srcDf, IgnoreFirstRows = 1):
         # This function takes a source data frame (srcDf) and replaces the 
         # member dataframe with it, as long as srcDf is a dataframe.
         # The column names of the source data are ignored, but 
@@ -606,24 +612,26 @@ turned into a dataframe. Nothing appended.')
         try:
             df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
         except ValueError:
-            print('    WARNING: The data specified for the replaceData function could not be \
-turned into a dataframe. The data was not replaced.')
+            print('    WARNING: The data specified for the replaceData function \
+could not be turned into a dataframe. The data was not replaced.')
             return
 
         # drop rows that should be ignored
         if 1 <= IgnoreFirstRows:
             df_temp.drop(df_temp.index[:IgnoreFirstRows], inplace=True)
 
-        # condition and filter the passed in dataframe
-        __massageData(df_temp)
-        __filterData(df_temp)
-
-        # now replace the member data.
-        self._df = pd.DataFrame(data=df_temp)
+        # condition and filter the passed in dataframe.
+        # The member data will be updated.
+        self.__massageData(df_temp)
+        self.__filterData(df_temp)
         return
 
-    # Private member function to massage a specified dataframe:
-    # This function assumes a dataframe with at least two columns. It
+    # Private member function to massage a specified dataframe, and return 
+    # the resulting dataframe. 
+    # If no source data is specified, the memeber data is used as the soruce.
+    #
+    # This function assumes the source is a dataframe with at least two columns,
+    # or an object that could be converted to such a thing. It
     # will try and turn one column into a timestamp index, and another it
     # will try turn into a float value column. Before finishing:
     #   The timestamp will be changed to a datetime (if needed)
@@ -641,31 +649,40 @@ turned into a dataframe. The data was not replaced.')
     # The value column needs to be a float or convertible to a 
     # float and needs to be named the same as the string stored in self._yName.
     #
+    # Returns a DataFrame
+    #
     # Exceptions raised:
     #   NameError if value or timestamp column name cannot be found in the df.
-    #   TypeError if a dataframe is not specified for df
+    #   TypeError if a dataframe or something like it is passed in for 
+    #       the source dataframe.
 
-    def __massageData(self, df=self._df):
-        # make sure a dataframe, or something that can be converted to a
-        # dataframe is passed in, otherwise leave.
+    def __massageData(self, srcDf=None):
+        # self is not defined when the default params are evaluated, so can't
+        # use srcDf=self._df 
+        # do this as a work around
+        if srcDf is None:
+            srcDf=self._df
+        
+        # make sure dataframes, or things that can be converted to
+        # dataframes are passed in, otherwise leave.
         try: 
-            df_temp = pd.DataFrame(df)
+            df_srcTemp = pd.DataFrame(srcDf)
         except TypeError as te:
             print('    ERROR Processing ' + self._name + '.\n \
-The private member function __massageData was not passed anything that can \
+The private member function __massageData was not passed source data that can \
 be converted to a dataframe. No data was changed.')
             print(te)
             raise te
 
         # verify the correct column and/or index names exist. If not raise a NameError
-        dfCols = df_temp.columns
-        dfIndex = df_temp.index.name
-        if not (self._yName in srcCols) or \
-                not (self._tsName in srcCols or self._tsName == srcIndex):
+        dfCols = df_srcTemp.columns
+        dfIndex = df_srcTemp.index.name
+        if not (self._yName in dfCols) or \
+                not (self._tsName in dfCols or self._tsName == dfIndex):
                     # source data column names are not as needed. Raise a name error:
             try:
-                if not (self._yName in srcCols):
-                # value column name not found in the df_temp. Raise a NameError
+                if not (self._yName in dfCols):
+                # value column name not found in the df_srcTemp. Raise a NameError
                     raise NameError('    ERROR Processing ' + self._name + '.\n \
 The data cannot be processed because a column named "' + self._yName + '" is \
 needed. It is used as the value column.')
@@ -676,7 +693,7 @@ needed. It is used as the value column.')
                     raise ne
             
             try:
-                if not (self._tsName in srcCols or self._tsName == srcIndex):
+                if not (self._tsName in dfCols or self._tsName == dfIndex):
                     # There is no index or value column name the same as the timestamp
                     # name. Raise a NameError.
                     raise NameError('    ERROR Processing ' + self._name + '.\n \
@@ -694,18 +711,18 @@ named "' + self._tsName + '". It is used as the timestamp.')
         #
         # Change the value column to a float if needed. Issue a warning, but 
         # do the best conversion possible in any event.
-        if 'float64' != df_temp[self._yName].dtype:
+        if 'float64' != df_srcTemp[self._yName].dtype:
             try:
-                df_temp[self._yName] = df_temp[self._yName].astype('float',
+                df_srcTemp[self._yName] = df_srcTemp[self._yName].astype('float',
                                                                 errors='raise')
             except ValueError as ve:
                 print('    WARNING: There was a problem converting at least one \
 value into a float. The conversion did the best conversion possible.')
                 print(ve)
-                df_temp[self._yName] = df_temp[self._yName].astype('float',
+                df_srcTemp[self._yName] = df_srcTemp[self._yName].astype('float',
                                                                 errors='ignore')
 
-        # As an intermediate step, we want the df_temp to have the timestamp as a 
+        # As an intermediate step, we want the df_srcTemp to have the timestamp as a 
         # datetime value column (not the index) so we can more easily drop dups,
         # round time, etc.  The following matrix is used to decide what to do
         # ----------------------------------------------------------------------------
@@ -734,25 +751,25 @@ value into a float. The conversion did the best conversion possible.')
       
         # See if there is an index and column that match the timestamp name.
         # If there is, print a message, and drop the column.
-        if self._tsName == df_temp.index.name and (self._tsName in df_temp.cols):
+        if self._tsName == df_srcTemp.index.name and (self._tsName in df_srcTemp.cols):
             print('Processing ' + self._name + '.  The index and a value column \
 both match the timestamp name "' + self._tsName + '". Dropping the column, \
 and keeping the index.' )
-            df_temp.drop(columns=[self._tsName], inplace=True, errors='ignore')
+            df_srcTemp.drop(columns=[self._tsName], inplace=True, errors='ignore')
 
         # Now see if the index name matches the timestamp name. If it does,
         # reset the index so the indexed timestamp becomes a normal value column.
-        if self._tsName == df_temp.index.name:
-            df_temp.reset_index(drop=False, inplace=True)
+        if self._tsName == df_srcTemp.index.name:
+            df_srcTemp.reset_index(drop=False, inplace=True)
 
         # Now there is a timestamp value column. See if it is the correct datatype.
         # Convert it if needed.
-        if 'datetime64[ns]' != df_temp[self._tsName].dtype:
+        if 'datetime64[ns]' != df_srcTemp[self._tsName].dtype:
             try:
                 # For changing to timestamps, coerce option for errors mayh  mark
                 # some dates as NaT.
                 # Try it with raise first and then resort to coerce if needed.
-                df_temp[self._tsName] = pd.to_datetime(df_temp[self._tsName],
+                df_srcTemp[self._tsName] = pd.to_datetime(df_srcTemp[self._tsName],
                                                         errors='raise',
                                                         box = True, 
                                                         format=self._sourceTimeFormat,
@@ -764,7 +781,7 @@ and keeping the index.' )
 a problem converting some timestamps.Timestamps may be incorrect, and/or some \
 rows may be missing.')
                 print(ve)
-                df_temp[self._tsName] = pd.to_datetime(df_temp[self._tsName],
+                df_srcTemp[self._tsName] = pd.to_datetime(df_srcTemp[self._tsName],
                                                     errors='coerce',
                                                     box = True, 
                                                     infer_datetime_format = True,
@@ -774,54 +791,61 @@ rows may be missing.')
         # Condition the data and (re)index it.
         # Get rid of any NaN/NaT values in either column. These can be from the
         # original data or from invalid conversions to float or datetime.
-        df_temp.dropna(subset=[self._tsName, self._yName], how='any', inplace=True)
+        df_srcTemp.dropna(subset=[self._tsName, self._yName], how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
         try:
-            df_temp[self._tsName] = df_temp[self._tsName].dt.round('L')
+            df_srcTemp[self._tsName] = df_srcTemp[self._tsName].dt.round('L')
         except ValueError as ve:
             print('    WARNING: Timestamp cannot be rounded.')
             print(ve)
 
         # Get rid of any duplicate timestamps. Done after rounding in case rouding
         # introduced dups.
-        df_temp[self._tsName].drop_duplicates(subset=self._tsName,
-                                                keep='last', inplace=True)
+        df_srcTemp.drop_duplicates(subset=self._tsName, keep='last', inplace=True)
 
         # Now the data type is correct, and foreseen data errors are removed.
-        # Set the index to the timestamp column and sort it
-        df_temp.set_index(self._tsName, inplace=True)
-        df_temp.sort_index(inplace=True)
+        # Set the index to the timestamp column and sort it.
+        # Set the member dataframe to the massaged data
+        df_srcTemp.set_index(self._tsName, inplace=True)
 
         # All done. Data in indexed by timestamp, and there is a correctly 
         # named value column.  There are no NaN/NaT values, timestamps have been 
         # rounded to mSec, and there are no duplicate timestamps.
-        # Set the specified dataframe to the massaged data
-        df = df_temp
-        return
+        return df_srcTemp.sort_index(inplace=False)
 
-    # private member function to apply the value query and the timestamp filter
-    def __filterData(self, df=self._df):
-        # make sure a dataframe is passed in
-        if not isinstance(df, pd.DataFrame):
-            try:
-                raise TypeError('    ERROR Processing ' + self._name + '.\n \
-The private member function __filterData was not passed a pandas dataframe. \
-Nothing was filtered.')
-            except TypeError as te:
-                print(te)
-                raise te
-                
-                
+        # end of def __massageData(self, srcDf):
 
+    # Private member function to apply the value query and the timestamp filter
+    # to a specified dataframe, and return the resulting dataframe.
+    # If no source dataframe is specified, the member dataframe is used.
+    def __filterData(self, srcDf=None):
+        # self is not defined when the default params are evaluated, so can't
+        # use srcDf=self._df
+        # do this as a work around
+        if srcDf is None:
+            df=self._df
+        
+        # make sure a dataframe, or something that can be converted to a
+        # dataframe is passed in, otherwise leave.
+        try: 
+            df_temp = pd.DataFrame(df)
+        except TypeError as te:
+            print('    ERROR Processing ' + self._name + '.\n \
+The private member function __filterData was not passed anything that can \
+be converted to a dataframe. No data was changed.')
+            print(te)
+            raise te
+                
         # Apply the query string if one is specified.
         # Replace "val" with the column name.
         if self._vq != '':
             queryStr = self._vq.replace("val", self._yName)
             # try to run the query string, but ignore it on error
             try:
-                df.query(queryStr, inplace = True)
+                df_temp.query(queryStr, inplace = True)
+
             except ValueError:
                 print('    WARNING: Invalid query string. Ignoring the \
 specified query when appending data.')
@@ -830,8 +854,9 @@ specified query when appending data.')
         # start and end times.
         # Non specified times will be None, so the filter still works as
         # is. If both are none, no filtering is performed.
-        df = df.loc[self._startQuery : self._endQuery]
-        return
+        # Either way, set the member dataframe to the result
+        return df_temp.loc[self._startQuery : self._endQuery]
+        # end of def __filterData(self, srcDf=None):
 
     # read only properties
     @property

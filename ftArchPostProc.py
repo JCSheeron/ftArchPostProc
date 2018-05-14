@@ -829,7 +829,7 @@ follows:\n    TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, V
 Where normally there are multiple tags each at multiple timestamps. Timestamps are \
 not necessarily synchronized.\n')
 
-    # If there are files specified to merge, merge them with the input file before 
+    # If t,nhere are files specified to merge, merge them with the input file before 
     # further processing. Since the file format has rows being unique on 
     # TagId and Timestamp combo, this merge simply makes the source data longer
     # by appending rows (pd.concat with axis=0).
