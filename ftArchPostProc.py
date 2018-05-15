@@ -743,9 +743,18 @@ Unexpected encoding can also cause this error.')
         valName = 'value_' + instName
         # print a message showing what we are processing
         print('\nProcessing ' + instName)
+        # create a new instrument object 
         # create a new dataframe for the instrument and use the above column names
         df_valData = pd.DataFrame(data=df_source.iloc[:,[idx,idx+1]])
         df_valData.columns = [tsName, valName]
+        print('**** df_valData ****')
+        print(df_valData)
+        # create a new instrument object 
+        tid_inst = TsIdxData(instName, tsName, valName, df_valData, 
+                             args.valueQuery, startArg, endArg, sourceTimeFormat)
+        print('****tid_inst ****')
+        print(tid_inst)
+        quit()
         # change the data types of the timestamp and value columns if needed
         # value data needs to be float
         if 'float64' != df_valData[valName].dtype:

@@ -32,7 +32,7 @@ import pandas as pd
 # column or an index column with a name that matches tsName. This column will be
 # used as the index.
 #
-# The constructore is expecting a data frame which is used as the source data.
+# The constructor is expecting a data frame which is used as the source data.
 #
 # The constructor (ctor) has these areguments:
 #   name -- The name to give the object. An instrument name for example.
@@ -644,10 +644,19 @@ could not be turned into a dataframe. The data was not replaced.')
     # NaN/NaT, or the timestamp is a duplicate.
     #
     # The timestamp column must be a datetime or convertible to a datetime
-    # and either needs to be the index or a value column. Either way, it needs
-    # to be named the same as the string stored in self._tsName.
+    # and either needs to be the index or a value column.
     # The value column needs to be a float or convertible to a 
-    # float and needs to be named the same as the string stored in self._yName.
+    # float.
+    #
+    # If forceColNames is false (default), the timestamp name must match the
+    # string in self._tsName, and the value name must match the string in 
+    # self._yName. If forceColNames is set, the incoming column names are 
+    # ignored and the columns are renamed to match self._tsName and self._yName.
+    #
+    # If forceColNames is set, any columns named correctly will be used. If none
+    # are named correctly, the 1st column ([0]) will be the timestamp, and the 
+    # second column will be the value. The names of any other columns will be
+    # unchanged.
     #
     # Returns a DataFrame
     #
@@ -656,7 +665,7 @@ could not be turned into a dataframe. The data was not replaced.')
     #   TypeError if a dataframe or something like it is passed in for 
     #       the source dataframe.
 
-    def __massageData(self, srcDf=None):
+    def __massageData(self, srcDf=None, forceColNames=False):
         # self is not defined when the default params are evaluated, so can't
         # use srcDf=self._df 
         # do this as a work around
@@ -673,6 +682,17 @@ The private member function __massageData was not passed source data that can \
 be converted to a dataframe. No data was changed.')
             print(te)
             raise te
+
+        # Set the column names if they are being forced, or verify them correct.
+        # If not being forced. If forced, assume the 1st col is the timestamp and 
+        # the second is the value.
+        # TODO: Implement forceColNames
+        '''
+        if forceColNames:
+            # see if the names exist and use them
+            # Reorder them ts, then value, then other
+            # If the names don't exist, rename [0] and [1]
+        '''
 
         # verify the correct column and/or index names exist. If not raise a NameError
         dfCols = df_srcTemp.columns
@@ -778,7 +798,7 @@ and keeping the index.' )
                                                         origin = 'unix')
             except ValueError as ve:
                 print('    WARNING: Processing ' + self._name + '. There was \
-a problem converting some timestamps.Timestamps may be incorrect, and/or some \
+a problem converting some timestamps. Timestamps may be incorrect, and/or some \
 rows may be missing.')
                 print(ve)
                 df_srcTemp[self._tsName] = pd.to_datetime(df_srcTemp[self._tsName],
