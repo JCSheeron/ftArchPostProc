@@ -115,7 +115,7 @@
 # as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
 # year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M
 # minutes, %S seconds, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
-# The default string is "%m/%d/%Y %I:%M:%S %p".'
+# The default string is "%m/%d/%Y %H:%M:%S.%f".'
 #
 # -rs or --resample (optional, default=None) Resample the data. This is usually
 # used to "downsample" data. For example, create an output file with 1 sample
@@ -378,12 +378,12 @@ is specified, the moment before midnight (11:59:59.999) is used so the \
 entire date is included.  If this argument is not used, the end time is \
 derived from the data, and the latest of all the data timestamps is used.')
 parser.add_argument('-stf', '--sourceTimeFormat', \
-                    default='%m/%d/%Y %I:%M:%S %p', metavar='', \
+                    default='%m/%d/%Y %H:%M:%S.%f', metavar='', \
                     help='Specify the format of the source data time format, \
 as a string. Use the following placeholders:%%m minutes, %%d days, %%Y 4 digit \
 year, %%y two digit year, %%H hours (24hr format) %%I hours (12 hr format), %%M \
 minutes, %%S seconds, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
-The default string is "%%m/%%d/%%Y %%I:%%M:%%S %%p".')
+The default string is "%%m/%%d/%%Y %%H:%%M:%%S.%%f".')
 parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample the data. This is usually \
  used to "downsample" data. For example, create an output file with 1 sample \
@@ -709,8 +709,6 @@ Unexpected encoding can also cause this error.')
         
     # update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
-    print('**** Header List ****')
-    print(headerList)
     # sort the data by time
     df_source.sort_index(inplace=True)
     
@@ -743,57 +741,15 @@ Unexpected encoding can also cause this error.')
         valName = 'value_' + instName
         # print a message showing what we are processing
         print('\nProcessing ' + instName)
-        # create a new instrument object 
-        # create a new dataframe for the instrument and use the above column names
-        df_valData = pd.DataFrame(data=df_source.iloc[:,[idx,idx+1]])
-        df_valData.columns = [tsName, valName]
-        print('**** df_valData ****')
-        print(df_valData)
-        # create a new instrument object 
-        tid_inst = TsIdxData(instName, tsName, valName, df_valData, 
-                             args.valueQuery, startArg, endArg, sourceTimeFormat)
-        print('****tid_inst ****')
-        print(tid_inst)
-        quit()
-        # change the data types of the timestamp and value columns if needed
-        # value data needs to be float
-        if 'float64' != df_valData[valName].dtype:
-            # not a float, but it should be. Change the type
-            df_valData[valName] = df_valData[valName].astype('float',errors='ignore')
-        # timestamp needs to be a date time
-        if 'datetime64[ns]' != df_valData[tsName].dtype:
-            # For changing to timestamps, coerce option for errors is marking
-            # dates after midnight (next day) as NaT.
-            # Not sure why. Try it with raise, first, and you get
-            # all the values. Put it in a try block, just in case an error is
-            # raised.
-            try:
-                df_valData[tsName] = pd.to_datetime(df_valData[tsName],
-                                                errors='raise',
-                                                box = True, 
-                                                format=sourceTimeFormat,
-                                                exact=False,
-                                                #infer_datetime_format = True,
-                                                origin = 'unix')
-            except:
-                print('    WARNING: Problem converting some timestamps from \
-the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
-                df_valData[tsName] = pd.to_datetime(df_valData[tsName],
-                                                errors='coerce',
-                                                box = True, 
-                                                infer_datetime_format = True,
-                                                origin = 'unix')
-        # set the timestamp column to be the index
-        df_valData.set_index(tsName, inplace=True)
-        # sort the index for possible better performance later
-        df_valData.sort_index(inplace=True)
-        
+        # Create a new instrument object and use the above column names.
+        tid_inst = TsIdxData(instName, tsName, valName,
+                             df_source.iloc[:,[idx,idx+1]], 
+                             args.valueQuery, startArg, endArg,
+                             sourceTimeFormat, forceColNames=True)
         # See if instrument is already in the list. If so append the 
         # data to an existing instrument object already in the object list.
         # If not, then append a new object with the new data to the name and
         # object lists.
-        print('**** InstDataNames before check for "' + instName + '" ****')
-        print(instDataNames)
         if instName in instDataNames:
             # An instrument with the same name already exists. 
             # Append this data to it
@@ -802,8 +758,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
 
             # Appending the data will apply previously specified value queries
             # and time filtering
-            instData[idx].appendData(df_valData, 0) # don't ignore any rows
-            print(instData[idx])
+            instData[idx].appendData(tid_inst.data, 0) # don't ignore any rows
         else:
             # This instrument is not in the instrument list yet.  
             # Append it to the name list and the object list
@@ -813,13 +768,14 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
             # instrument data object, and append it to the list.
             # Querying of value and filtering of timestamps will happen during
             # construction of the object
-            instData.append(TsIdxData(instName, tsName, valName, df_valData,
-                                     args.valueQuery, startArg, endArg,
-                                     sourceTimeFormat))
+            instData.append(tid_inst)
+            #instData.append(TsIdxData(instName, tsName, valName, df_valData,
+            #                         args.valueQuery, startArg, endArg,
+            #                         sourceTimeFormat))
 
         # The instrument data is now contained in the instrument InstData object.
-        # Delete the valData dataframe to free up resources.
-        del df_valData
+        # Delete the instrument object to free up resources.
+        del tid_inst
 
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source

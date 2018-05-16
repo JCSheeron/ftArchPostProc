@@ -121,6 +121,11 @@ import pandas as pd
 #
 #    columns
 #       dictionary with column names as the key and the data type as a value {col name : datatype, ...}
+#   indexName 
+#       string name of the index
+#
+#   index
+#       an array of data about the index, including the index data, datatype, and name
 #
 #    data
 #        a copy of the dataframe
@@ -146,7 +151,8 @@ import pandas as pd
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
             valueQuery=None, startQuery=None, endQuery=None,
-            sourceTimeFormat='%m/%d/%Y %H:%M:%S.%f'):
+            sourceTimeFormat='%m/%d/%Y %H:%M:%S.%f', 
+            forceColNames=False):
         self._name = str(name) # use the string version
 
         # default x-axis (timestamp) label to 'timestamp' if nothing is specified
@@ -290,7 +296,7 @@ class TsIdxData(object):
             # Source data is specified ...
             # Use the member function to process it into the form we need.
             self._df = pd.DataFrame(columns=[self._tsName, self._yName])
-            self._df = self.__massageData(srcDf=df)
+            self._df = self.__massageData(srcDf=df, forceColNames=forceColNames)
             # Use the member function to apply the filters
             self._df = self.__filterData()
 
@@ -569,6 +575,9 @@ matches data frequency. Data unchanged. Frequency is ' + str(self._timeOffset))
         # This allows something like a dataframe to be used (like a list, dict,
         # or other dataframe. If it isn't possible to build a dataframe from what
         # was passed in, print a message and punt.
+        #
+        # If duplicate timestamps exist after the merge, duplicates will be dropped
+        # keeping the last value found in the list.
         try:
             df_temp = pd.DataFrame(data=srcDf, columns=[self._yName])
         except ValueError:
@@ -580,17 +589,20 @@ could not be turned into a dataframe. Nothing appended.')
         if 1 <= IgnoreFirstRows:
             df_temp.drop(df_temp.index[:IgnoreFirstRows], inplace=True)
 
-        # now merge the conditioned data with the member data, along the index
-        # (timestamp) axis
-        df_temp = self._df.append(df_temp)
-
         # condition and filter the passed in dataframe
-        self.__massageData(df_temp)
-        self.__filterData(df_temp)
+        df_temp = self.__massageData(df_temp)
+        df_temp = self.__filterData(df_temp)
 
         # now merge the conditioned data with the member data, along the index
         # (timestamp) axis
-        df_temp = self._df.append(df_temp)
+        self._df = self._df.append(df_temp)
+
+        # The merge may have made duplicate indexes. Drop them, but this requires
+        # resetting and rebuilding the index.
+        self._df.reset_index(drop=False, inplace=True)
+        self._df.drop_duplicates(subset=self._tsName, keep='last', inplace=True)
+        self._df.set_index(self._tsName, inplace=True)
+        self._df.sort_index(inplace=True)
         return
 
     # drop existing data and replace it with the specified dataframe, as long
@@ -622,18 +634,19 @@ could not be turned into a dataframe. The data was not replaced.')
 
         # condition and filter the passed in dataframe.
         # The member data will be updated.
-        self.__massageData(df_temp)
-        self.__filterData(df_temp)
+        self._df = self.__massageData(df_temp)
+        self._df = self.__filterData()
         return
 
     # Private member function to massage a specified dataframe, and return 
     # the resulting dataframe. 
     # If no source data is specified, the memeber data is used as the soruce.
     #
-    # This function assumes the source is a dataframe with at least two columns,
-    # or an object that could be converted to such a thing. It
-    # will try and turn one column into a timestamp index, and another it
-    # will try turn into a float value column. Before finishing:
+    # This function assumes the source is a dataframe with at least an index and
+    # a column, or two columns, or an object that could be converted to such a
+    # thing. It will try and turn one column into a timestamp index,
+    # and another it will try turn into a float value column.
+    # Before finishing:
     #   The timestamp will be changed to a datetime (if needed)
     #   The value will be turned into a float (if needed)
     #   The timestamp will be rounded to milliseconds
@@ -648,15 +661,15 @@ could not be turned into a dataframe. The data was not replaced.')
     # The value column needs to be a float or convertible to a 
     # float.
     #
+    # If forceColNames is true, check for correctly named columns and use them
+    # if they are present. Otherwise assume the index is the timestamp if it is
+    # a datetime, or use the 1st col as the timestamp if the index is not a
+    # datetime. Use the 2nd column as the value if the index is not a datetime,
+    # or use the 1st column as the value if the index is a datetime.
+    #
     # If forceColNames is false (default), the timestamp name must match the
     # string in self._tsName, and the value name must match the string in 
-    # self._yName. If forceColNames is set, the incoming column names are 
-    # ignored and the columns are renamed to match self._tsName and self._yName.
-    #
-    # If forceColNames is set, any columns named correctly will be used. If none
-    # are named correctly, the 1st column ([0]) will be the timestamp, and the 
-    # second column will be the value. The names of any other columns will be
-    # unchanged.
+    # self._yName. 
     #
     # Returns a DataFrame
     #
@@ -672,8 +685,8 @@ could not be turned into a dataframe. The data was not replaced.')
         if srcDf is None:
             srcDf=self._df
         
-        # make sure dataframes, or things that can be converted to
-        # dataframes are passed in, otherwise leave.
+        # make sure a dataframe, or something that can be converted to
+        # dataframe is passed in, otherwise leave.
         try: 
             df_srcTemp = pd.DataFrame(srcDf)
         except TypeError as te:
@@ -683,20 +696,56 @@ be converted to a dataframe. No data was changed.')
             print(te)
             raise te
 
-        # Set the column names if they are being forced, or verify them correct.
-        # If not being forced. If forced, assume the 1st col is the timestamp and 
-        # the second is the value.
-        # TODO: Implement forceColNames
-        '''
-        if forceColNames:
-            # see if the names exist and use them
-            # Reorder them ts, then value, then other
-            # If the names don't exist, rename [0] and [1]
-        '''
-
-        # verify the correct column and/or index names exist. If not raise a NameError
+        # Get the column and index names.
         dfCols = df_srcTemp.columns
         dfIndex = df_srcTemp.index.name
+
+        # Set the column names if they are being forced.
+        # Assume the index is the timestamp if it is a datetime, or the 
+        # 1st col is the timestamp if the index is not a datetime.
+        # Use the 2nd column as the value if the index is not a datetime,
+        # or use the 1st column as the value if the index is a datetime.
+        
+        if forceColNames:
+            # see if the names exist and use them if they do
+            # timestamp name
+            if self._tsName == dfIndex or self._tsName in dfCols:
+                # Timestamp name is the index or a column name. Nothing to do.
+                # Here for completeness and possible future use. Reorder the 
+                # non-index case to leftmost column.
+                pass
+            else:
+                # timestamp name isn't the index or a column name.
+                # If the index is a datetime datatype, assume this should
+                # be the timestamp column and name it. Otherwise, assume the
+                # leftmost column is the timestamp.
+                if 'datetime64[ns]'==df_srcTemp.index.dtype:
+                    df_srcTemp.index.rename(self._tsName, inplace=True)
+                else:
+                    df_srcTemp.rename(columns={dfCols[0]: self._tsName}, inplace=True)
+
+            # value column name
+            if self._yName in dfCols:
+                # value name is already a column name. Nothing to do.
+                # Here for completeness and possible future use. Reorder
+                # to the second column from the left?
+                pass
+            else:
+                # Value name isn't already a column name.
+                # If the index is a datetime, assume the value is the 1st column,
+                # otherwise, assume the value is the second column.
+                if 'datetime64[ns]'==df_srcTemp.index.dtype:
+                    df_srcTemp.rename(columns={dfCols[0]: self._yName}, inplace=True)
+                else:
+                    df_srcTemp.rename(columns={dfCols[1]: self._yName}, inplace=True)
+            
+            # update the column and index names
+            dfCols = df_srcTemp.columns
+            dfIndex = df_srcTemp.index.name
+                
+        # If the column names were force, they should be correct and pass
+        # the tests below. If not, a name error may be raised.
+        # Verify the correct column and/or index names exist. If not raise a NameError 
         if not (self._yName in dfCols) or \
                 not (self._tsName in dfCols or self._tsName == dfIndex):
                     # source data column names are not as needed. Raise a name error:
@@ -771,7 +820,7 @@ value into a float. The conversion did the best conversion possible.')
       
         # See if there is an index and column that match the timestamp name.
         # If there is, print a message, and drop the column.
-        if self._tsName == df_srcTemp.index.name and (self._tsName in df_srcTemp.cols):
+        if self._tsName == dfIndex and (self._tsName in dfCols):
             print('Processing ' + self._name + '.  The index and a value column \
 both match the timestamp name "' + self._tsName + '". Dropping the column, \
 and keeping the index.' )
@@ -779,7 +828,7 @@ and keeping the index.' )
 
         # Now see if the index name matches the timestamp name. If it does,
         # reset the index so the indexed timestamp becomes a normal value column.
-        if self._tsName == df_srcTemp.index.name:
+        if self._tsName == dfIndex:
             df_srcTemp.reset_index(drop=False, inplace=True)
 
         # Now there is a timestamp value column. See if it is the correct datatype.
@@ -806,7 +855,7 @@ rows may be missing.')
                                                     box = True, 
                                                     infer_datetime_format = True,
                                                     origin = 'unix')
-                    
+
         # Now the column names and data types are correct.    
         # Condition the data and (re)index it.
         # Get rid of any NaN/NaT values in either column. These can be from the
@@ -845,12 +894,12 @@ rows may be missing.')
         # use srcDf=self._df
         # do this as a work around
         if srcDf is None:
-            df=self._df
+            srcDf=self._df
         
         # make sure a dataframe, or something that can be converted to a
         # dataframe is passed in, otherwise leave.
         try: 
-            df_temp = pd.DataFrame(df)
+            df_temp = pd.DataFrame(srcDf)
         except TypeError as te:
             print('    ERROR Processing ' + self._name + '.\n \
 The private member function __filterData was not passed anything that can \
@@ -890,6 +939,13 @@ specified query when appending data.')
     @property
     def valueQuery(self):
         return self._vq
+    @property
+    def indexName(self):
+        return self._df.index.name
+    
+    @property
+    def index(self):
+        return self._df.index
 
     @property
     def columns(self):
