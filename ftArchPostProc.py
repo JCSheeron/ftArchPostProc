@@ -549,7 +549,6 @@ headerList = df_source.columns.values.tolist()
 instData = []
 instDataNames = []
 
-
 # **** Look at the data type being input (-t, -a, or -n) and make sure there
 # is at least the minimum number of columns for a valid data file. If there are
 # any merge files specified (-am params), then merge them. Finally process the 
@@ -709,12 +708,7 @@ Unexpected encoding can also cause this error.')
         
     # update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
-    # sort the data by time
-    df_source.sort_index(inplace=True)
     
-    # TODO: Make sure duplicate rows are handled.
-    # Needed here or already taken care of below?
-
     # Loop thru the header list. Get the instrument name, create a data frame for
     # each instrument, get the timestamp to be a datetime and the value to be a
     # float, create a list of instruments and an list of TsIdxData objects (one
@@ -724,11 +718,24 @@ Unexpected encoding can also cause this error.')
         # For each header entry, make instrument and timestamp column names.
         # Even indexes are timestamps, odd indexes are values.
         # Get the inst name, leaving off the bit after the last space, which is
-        # normally 'Time' or 'ValueY'
-        # rpartition returns a tuple: first, separator, last. Use the first 
+        # normally 'Time' or 'ValueY'. If there is no space found, use the entire
+        # string as the instrument name.
+        # rpartition separates a string at the last separator,
+        # working from the right. Given a separator, rpartition returns a tuple: 
+        #   The part before the separator, the separator, and the part after 
+        #   the separator.  If the separator is not found, then the first two
+        #   elements are empty, and the third member contains the original string. 
         # member as the tag name -- this allows tag names with spaces to be
-        # preserved
-        instName = headerList[idx].rpartition(' ')[0] 
+        # preserved.
+        # 
+        separated = headerList[idx].rpartition(' ')
+        if not separated[0]:
+            # No spaces in the header entry. Use the entire thing as the inst name.
+            instName = separated[2]
+        else:
+            # Use the first part before the leftmost space as the inst name
+            instName = separated[0]
+
         # replace the spaces, hyphens, and periods with underscores
         instName = instName.replace(' ', '_')
         instName = instName.replace('-', '_')
@@ -769,9 +776,6 @@ Unexpected encoding can also cause this error.')
             # Querying of value and filtering of timestamps will happen during
             # construction of the object
             instData.append(tid_inst)
-            #instData.append(TsIdxData(instName, tsName, valName, df_valData,
-            #                         args.valueQuery, startArg, endArg,
-            #                         sourceTimeFormat))
 
         # The instrument data is now contained in the instrument InstData object.
         # Delete the instrument object to free up resources.
@@ -794,7 +798,7 @@ follows:\n    TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, V
 Where normally there are multiple tags each at multiple timestamps. Timestamps are \
 not necessarily synchronized.\n')
 
-    # If t,nhere are files specified to merge, merge them with the input file before 
+    # If there are files specified to merge, merge them with the input file before 
     # further processing. Since the file format has rows being unique on 
     # TagId and Timestamp combo, this merge simply makes the source data longer
     # by appending rows (pd.concat with axis=0).
@@ -948,19 +952,38 @@ Unexpected encoding can also cause this error.')
                                                    exact=False,
                                                    #infer_datetime_format = True,
                                                    origin = 'unix')
-    except:
+    except ValueError as ve:
         print('    WARNING: Problem converting some timestamps from \
 the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+        print(ve)
         df_valData[headerList[2]] = pd.to_datetime(df_valData[headerList[2]],
                                                    errors='coerce',
                                                    box = True, 
                                                    infer_datetime_format = True,
                                                    origin = 'unix')
 
+    
+    # Remove any NaN/NaT values as a result of conversion
+    df_valData.dropna(how='any', inplace=True)
+    # Rround the timestamp to the nearest ms. Unseen ns and
+    # fractional ms values are not always displayed, and can cause
+    # unexpected merge and up/downsample results.
+    try:
+        df_valData[headerList[2]] = df_valData[headerList[2]].dt.round('L')
+    except ValueError as ve:
+        print('    WARNING: Timestamp cannot be rounded.')
+        print(ve)
+    
+    # Get rid of any duplicate timestamps. Done after rounding in case rouding
+    # introduced dups.
+    df_valData.drop_duplicates(subset=[headerList[0],headerList[2]],
+                               keep='last', inplace=True)
     # now set the index to a multi-index of TagId,Timestamp
     df_valData.set_index([headerList[0],headerList[2]], inplace=True)
     # sort the index for possible better performance later
     df_valData.sort_index(inplace=True)
+    print('**** df_valData ****')
+    print(df_valData)
 
     # Now create a dataframe to hold a unique list of tag ids and tag names.
     df_tagList = df_source.drop(columns=[headerList[2],headerList[3],
@@ -968,13 +991,16 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
                                 inplace=False, errors='ignore')
     # force the id column datatype to an int
     df_tagList[headerList[0]] = df_tagList[headerList[0]].astype('int',errors='ignore')
+    # drop any NaN/NaT values
+    df_tagList.dropna(how='any', inplace=True)
     # Drop the duplicate ids
     df_tagList.drop_duplicates(subset=headerList[0], keep='first', inplace=True)
     # Set the index to the tagId
     df_tagList.set_index(headerList[0], inplace=True)
     # sort the index for possible better performance later
     df_tagList.sort_index(inplace=True)
-
+    print('**** df_tagList ****')
+    print(df_tagList)
     # done with the source data. Delete it.
     del df_source
 
@@ -984,9 +1010,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     for trow in df_tagList.itertuples(index=True, name=None):
         # itertuples will return a tuple (id, tagname) for a row
         # For tag, get the id and the name.
-        # rpartition returns a tuple: first, separator, last. Use the first 
-        # member as the tag name -- this allows tag names with spaces to be
-        # preserved
         instId = trow[0]
         instName = trow[1]
         # replace the spaces, hyphens, and periods with underscores
@@ -1004,45 +1027,48 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         # all the timestamped values for the current id. No need for the
         # tag name (it is the same for every row, and captured above, so leave
         # it out.
-        df_instData = pd.DataFrame(data=df_valData.loc[(instId, ), headerList[4]:]) 
-        # label the timestamp index column and the value column so the df column
-        # names being used to make the TsIdxData match the passed in column names.
-        df_instData.index.name = tsName
-        df_instData.columns = [valName]
+        # Create a new instrument object and use the above column names.
+        # Use the id index to get all the timestamped values for the current
+        # id. No need for the tag name (it is the same for every row, and
+        # captured above, so leave it out.
+        tid_inst = TsIdxData(instName, tsName, valName,
+                             df_valData.loc[(instId, ), headerList[4]:], 
+                             args.valueQuery, startArg, endArg,
+                             sourceTimeFormat, forceColNames=True)
+        print('**** tid_inst ****')
+        print(tid_inst)
         
         # See if instrument is already in the list. If so append the 
         # data to an existing instrument object already in the object list.
         # If not, then append a new object with the new data to the name and
         # object lists.
-        try:
-            # get the index in the name list. If it is present, the instrument
-            # is already present. Append the data. If it isn't present, this 
-            # will throw, and we'll append a new instrument.
+        if instName in instDataNames:
+            # An instrument with the same name already exists. 
+            # Append this data to it
             idx = instDataNames.index(instName)
+            print('Inst in list at index ' + str(idx) + '. Appending data.')
             # Appending the data will apply previously specified value queries
             # and time filtering
-            instData[idx].appendData(df_valData)
-        except:
+            instData[idx].appendData(tid_inst.data, 0) # don't ignore any rows
+        else:
             # This instrument is not in the instrument list yet.  
             # Append it to the name list and the object list
+            print('Inst not yet seen. Appending new instrument to list of instruments.')
             instDataNames.append(instName)
             # Make an object with the instrument name, labels and data frame
             # instrument data object, and append it to the list.
             # Querying of value and filtering of timestamps will happen during
             # construction of the object
-            instData.append(TsIdxData(instName, tsName, valName, df_valData,
-                                     args.valueQuery, startArg, endArg,
-                                     sourceTimeFormat))
+            instData.append(tid_inst)
 
         # the instrument data is now captured in the InstData objects.
-        # delete the valData dataframe to free up resources.
-        del df_instData
+        # delete it to free up resources.
+        del tid_inst
 
     # The value data for all the instruments is now captured in the InstData objects.
     # Delete the valData and the tagList dataframes to free up resources.
     del df_valData
     del df_tagList 
-
     
 elif args.n and len(headerList) >= 3:
     # normalized time data, and there is at least 1 instrument worth of data.
@@ -1061,9 +1087,9 @@ have the following format:\n \
     TimeStamp, Time Bias, Tag1 Value, Tag2 Value, Tag 3 Value ... ')
     # TODO: Time Bias support
     # KLUDGE: Drop the time bias as the times are already in local time, which 
-    # is what is desired. May be better to do somethign smarter with it, like
+    # is what is desired. May be better to do something smarter with it, like
     # modify the TsIdxData object to be UTC and timezone aware.
-    # Timestamps are in local time. No need for hte bias column. Drop it.
+    # Timestamps are in local time. No need for the bias column. Drop it.
     # NOTE: This is needed in the merge sections also!!
     df_source.drop(columns=[headerList[1]], inplace=True, errors='ignore')
 
@@ -1093,6 +1119,20 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
                                             box = True, 
                                             infer_datetime_format = True,
                                             origin = 'unix')
+    # Remove any NaN/NaT values as a result of conversion
+    df_soure.dropna(how='any', inplace=True)
+    # Rround the timestamp to the nearest ms. Unseen ns and
+    # fractional ms values are not always displayed, and can cause
+    # unexpected merge and up/downsample results.
+    try:
+        df_source[tsName] = df_source[tsName].dt.round('L')
+    except ValueError as ve:
+        print('    WARNING: Timestamp cannot be rounded.')
+        print(ve)
+    
+    # Get rid of any duplicate timestamps. Done after rounding in case rounding
+    # introduced dups.
+    df_source.drop_duplicates(subset=[tsName], keep='last', inplace=True)
     # set the timestamp column to be the index
     df_source.set_index(tsName, inplace=True)
     # sort the index for possible better performance later
@@ -1120,10 +1160,11 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
             quit()
+
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
 
-        # Index the source data time stamp column. Since we know this will be the
+        # Index the merge data time stamp column. Since we know this will be the
         # index in this case, do this early so we can take advantage of it later.
         # First make sure the timesamp can be converted to a datetime.
         tsName = df_merge.columns[0]
@@ -1143,17 +1184,31 @@ Unexpected encoding can also cause this error.')
                                                 origin = 'unix')
             except:
                 print('    WARNING: Problem converting some timestamps from \
-    the am1/archiveMerge1 file "' + args.archiveMerge1 + '".  Timestamps may be \
-    incorrect, and/or some rows may be missing.')
+    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
+        # Remove any NaN/NaT values as a result of conversion
+        df_soure.dropna(how='any', inplace=True)
+        # Rround the timestamp to the nearest ms. Unseen ns and
+        # fractional ms values are not always displayed, and can cause
+        # unexpected merge and up/downsample results.
+        try:
+            df_merge[tsName] = df_merge[tsName].dt.round('L')
+        except ValueError as ve:
+            print('    WARNING: Timestamp cannot be rounded.')
+            print(ve)
+        
+        # Get rid of any duplicate timestamps. Done after rounding in case rounding
+        # introduced dups.
+        df_merge.drop_duplicates(subset=[tsName], keep='last', inplace=True)
         # set the timestamp column to be the index
         df_merge.set_index(tsName, inplace=True)
         # sort the index for possible better performance later
         df_merge.sort_index(inplace=True)
+
         print('**** Merge Data indexed ****')
         print(df_merge)
         
@@ -1172,7 +1227,7 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
         
-# Merge File 2
+    # Merge File 2
     if args.archiveMerge2 is not None:
         try:
             print('Merging file "' + args.archiveMerge2 + '".')
@@ -1190,7 +1245,7 @@ Unexpected encoding can also cause this error.')
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
 
-        # Index the source data time stamp column. Since we know this will be the
+        # Index the merge data time stamp column. Since we know this will be the
         # index in this case, do this early so we can take advantage of it later.
         # First make sure the timesamp can be converted to a datetime.
         tsName = df_merge.columns[0]
@@ -1210,17 +1265,31 @@ Unexpected encoding can also cause this error.')
                                                 origin = 'unix')
             except:
                 print('    WARNING: Problem converting some timestamps from \
-    the am2/archiveMerge2 file "' + args.archiveMerge2 + '".  Timestamps may be \
-    incorrect, and/or some rows may be missing.')
+    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
+        # Remove any NaN/NaT values as a result of conversion
+        df_soure.dropna(how='any', inplace=True)
+        # Rround the timestamp to the nearest ms. Unseen ns and
+        # fractional ms values are not always displayed, and can cause
+        # unexpected merge and up/downsample results.
+        try:
+            df_merge[tsName] = df_merge[tsName].dt.round('L')
+        except ValueError as ve:
+            print('    WARNING: Timestamp cannot be rounded.')
+            print(ve)
+        
+        # Get rid of any duplicate timestamps. Done after rounding in case rounding
+        # introduced dups.
+        df_merge.drop_duplicates(subset=[tsName], keep='last', inplace=True)
         # set the timestamp column to be the index
         df_merge.set_index(tsName, inplace=True)
         # sort the index for possible better performance later
         df_merge.sort_index(inplace=True)
+
         print('**** Merge Data indexed ****')
         print(df_merge)
         
@@ -1238,7 +1307,7 @@ Unexpected encoding can also cause this error.')
         del df_merge
         df_source = df_merged
         del df_merged
-
+        
     # Merge File 3
     if args.archiveMerge3 is not None:
         try:
@@ -1257,7 +1326,7 @@ Unexpected encoding can also cause this error.')
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
 
-        # Index the source data time stamp column. Since we know this will be the
+        # Index the merge data time stamp column. Since we know this will be the
         # index in this case, do this early so we can take advantage of it later.
         # First make sure the timesamp can be converted to a datetime.
         tsName = df_merge.columns[0]
@@ -1277,17 +1346,31 @@ Unexpected encoding can also cause this error.')
                                                 origin = 'unix')
             except:
                 print('    WARNING: Problem converting some timestamps from \
-    the am3/archiveMerge3 file "' + args.archiveMerge3 + '".  Timestamps may be \
-    incorrect, and/or some rows may be missing.')
+    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
+        # Remove any NaN/NaT values as a result of conversion
+        df_soure.dropna(how='any', inplace=True)
+        # Rround the timestamp to the nearest ms. Unseen ns and
+        # fractional ms values are not always displayed, and can cause
+        # unexpected merge and up/downsample results.
+        try:
+            df_merge[tsName] = df_merge[tsName].dt.round('L')
+        except ValueError as ve:
+            print('    WARNING: Timestamp cannot be rounded.')
+            print(ve)
+        
+        # Get rid of any duplicate timestamps. Done after rounding in case rounding
+        # introduced dups.
+        df_merge.drop_duplicates(subset=[tsName], keep='last', inplace=True)
         # set the timestamp column to be the index
         df_merge.set_index(tsName, inplace=True)
         # sort the index for possible better performance later
         df_merge.sort_index(inplace=True)
+
         print('**** Merge Data indexed ****')
         print(df_merge)
         
@@ -1305,6 +1388,7 @@ Unexpected encoding can also cause this error.')
         del df_merge
         df_source = df_merged
         del df_merged
+        
         
     # Merge File 4
     if args.archiveMerge4 is not None:
@@ -1324,7 +1408,7 @@ Unexpected encoding can also cause this error.')
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
 
-        # Index the source data time stamp column. Since we know this will be the
+        # Index the merge data time stamp column. Since we know this will be the
         # index in this case, do this early so we can take advantage of it later.
         # First make sure the timesamp can be converted to a datetime.
         tsName = df_merge.columns[0]
@@ -1344,17 +1428,31 @@ Unexpected encoding can also cause this error.')
                                                 origin = 'unix')
             except:
                 print('    WARNING: Problem converting some timestamps from \
-    the am4/archiveMerge4 file "' + args.archiveMerge4 + '".  Timestamps may be \
-    incorrect, and/or some rows may be missing.')
+    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
+        # Remove any NaN/NaT values as a result of conversion
+        df_soure.dropna(how='any', inplace=True)
+        # Rround the timestamp to the nearest ms. Unseen ns and
+        # fractional ms values are not always displayed, and can cause
+        # unexpected merge and up/downsample results.
+        try:
+            df_merge[tsName] = df_merge[tsName].dt.round('L')
+        except ValueError as ve:
+            print('    WARNING: Timestamp cannot be rounded.')
+            print(ve)
+        
+        # Get rid of any duplicate timestamps. Done after rounding in case rounding
+        # introduced dups.
+        df_merge.drop_duplicates(subset=[tsName], keep='last', inplace=True)
         # set the timestamp column to be the index
         df_merge.set_index(tsName, inplace=True)
         # sort the index for possible better performance later
         df_merge.sort_index(inplace=True)
+
         print('**** Merge Data indexed ****')
         print(df_merge)
         
@@ -1373,20 +1471,19 @@ Unexpected encoding can also cause this error.')
         df_source = df_merged
         del df_merged
         
-        
     # At this point, the source data has this structure
     # idx TimeStamp
     # [0] Tag 1 Value
     # ...
     # [n] Tag n Value,
-    # and the header row contains the tag names for the value columns.
+    # and the header contains the tag names for the value columns.
 
     # Update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
     print('**** Header List ****')
     print(headerList)
-    # make sure the data is still sorted by time
-    # NOTE: This may be unnecessary
+    # Make sure the data is still sorted by time after the merge. This may be 
+    # unnecessary, but just in case.
     df_source.sort_index(inplace=True)
 
     # Loop thru the header list. Get the instrument name, create a data frame for
@@ -1408,8 +1505,44 @@ Unexpected encoding can also cause this error.')
         valName = 'value_' + instName
         # print a message showing what we are processing
         print('\nProcessing ' + instName)
+        # Create a new instrument object and use the above column names.
+        tid_inst = TsIdxData(instName, tsName, valName,
+                             df_source.iloc[:,idx], 
+                             args.valueQuery, startArg, endArg,
+                             sourceTimeFormat, forceColNames=True)
+        # See if instrument is already in the list. If so append the 
+        # data to an existing instrument object already in the object list.
+        # If not, then append a new object with the new data to the name and
+        # object lists.
+        if instName in instDataNames:
+            # An instrument with the same name already exists. 
+            # Append this data to it
+            idx = instDataNames.index(instName)
+            print('Inst in list at index ' + str(idx) + '. Appending data.')
+
+            # Appending the data will apply previously specified value queries
+            # and time filtering
+            instData[idx].appendData(tid_inst.data, 0) # don't ignore any rows
+        else:
+            # This instrument is not in the instrument list yet.  
+            # Append it to the name list and the object list
+            print('Inst not yet seen. Appending new instrument to list of instruments.')
+            instDataNames.append(instName)
+            # Make an object with the instrument name, labels and data frame
+            # instrument data object, and append it to the list.
+            # Querying of value and filtering of timestamps will happen during
+            # construction of the object
+            instData.append(tid_inst)
+
+        # The instrument data is now contained in the instrument InstData object.
+        # Delete the instrument object to free up resources.
+        del tid_inst
+
+    # The data is now in instData in data frames. Done with the source data. Delete it.
+    del df_source
+        
+    '''
         # Create a new dataframe for the instrument and use the above column names.
-        #df_valData = pd.DataFrame(data=df_source.iloc[:,[idx]])
         df_valData = pd.DataFrame(data=df_source.iloc[:,idx])
         # drop rows with NaN values, usually these are from the merge
         df_valData.dropna(axis=0, how='any', inplace=True)
@@ -1450,7 +1583,7 @@ Unexpected encoding can also cause this error.')
 
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
-
+    '''
 print(instData)
 quit()
 

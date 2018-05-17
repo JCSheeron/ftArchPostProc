@@ -8,6 +8,10 @@ lib64
 pyvenv.cfg
 activate
 
+# ignore some python stuff that I don't know what it is for
+pip-selfcheck.json
+__pycache__/
+
 # ignore the orig files created by vim
 *.orig
 
