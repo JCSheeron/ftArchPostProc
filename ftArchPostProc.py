@@ -13,7 +13,7 @@
 #
 # In the case of a archive export file (the -a command line argument), the data
 # columns are as follows:
-#   TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality
+#   TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality
 # Where normally there are multiple tags each at multiple repeating
 # timestamps. Timestamps are not necessarily synchronized.
 #
@@ -58,7 +58,7 @@
 #
 # -a (required and mutually exclusive with -t and -n). Input file is a
 # archive export file. The format is:
-#     TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality
+#     TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality
 #
 # -n (required and mutually exclusive with -t and -a). Input file is a time
 # normalized export file.  The format is:
@@ -190,7 +190,7 @@ eplStr="""Final Test Archive Data Post Processing
 
  In the case of a archive export file (the -a command line argument), the data
  columns are as follows:
-     TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality
+     TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality
  Where normally there are multiple tags each at multiple repeating
  timestamps. Timestamps are not necessarily synchronized.
 
@@ -234,7 +234,7 @@ eplStr="""Final Test Archive Data Post Processing
 
  -a (required and mutually exclusive with -t and -n). Input file is a
  archive export file. The format is:
-     TagId,TagName,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),DataSource,Value,Quality
+     TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality
 
  -n (required and mutually exclusive with -t and -a). Input file is a time
  normalized export file.  The format is:
@@ -472,9 +472,10 @@ if args.startTime is not None:
         # convert to a pandas datetime for max compatibility
         startArg = pd.to_datetime(startArg, errors='raise', box=True,
                                   infer_datetime_format=True, origin='unix')
-    except:
+    except ValueError as ve:
         # not convertable ... invalid ... ignore
         print('WARNING: Invalid start time. Ignoring.')
+        print(ve)
         startArg = None
 else:
     # arg is none, so update the internal version
@@ -495,9 +496,10 @@ if args.endTime is not None:
             endArg = endArg.replace(hour=23, minute=59, 
                                     second=59, microsecond=999999)
 
-    except:
+    except ValueError as ve:
         # not convertable ... invalid ... ignore
         print('WARNING: Invalid end time. Ignoring.')
+        print(ve)
         endArg = None
     
 else:
@@ -509,8 +511,9 @@ if args.resample is not None:
     # a resample arg was supplied.  Try to use it, or default to 1 sec.
     try:
         resampleArg = to_offset(args.resample) # use the offset version
-    except:
+    except ValueError as ve:
         print('WARNING: Invalid resample period specified. Using 1 second')
+        print(ve)
         resampleArg = to_offset('S')
 else:
     # arg is none, so update the internal version
@@ -531,10 +534,12 @@ try:
     df_source = pd.read_csv(args.inputFileName, sep=args.sourceDelimiter,
                         delim_whitespace=False, encoding=args.sourceEncoding,
                         header=0, dtype = str, skipinitialspace=True)
-except:
+
+except ValueError as ve:
     print('ERROR opening source file: "' + args.inputFileName + '". Check file \
 name, file presence, and permissions. Unexpected encoding can also cause this \
 error.')
+    print(ve)
     quit()
 
 print('**** Input Data ****')
@@ -588,10 +593,11 @@ and the timestamps may or may not be synchronized.')
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
             #
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am1/archiveMerge1 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
@@ -620,10 +626,11 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am2/archiveMerge2\
 parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
@@ -652,10 +659,11 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am3/archiveMerge3 \
 parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
@@ -684,10 +692,11 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am4/archiveMerge4 \
 parameter: "' + args.archiveMerge1+ '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
@@ -812,10 +821,11 @@ not necessarily synchronized.\n')
             df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am1/archiveMerge1 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
@@ -844,10 +854,11 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am2/archiveMerge2 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
@@ -876,7 +887,7 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am3/archiveMerge3 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
@@ -908,10 +919,11 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am4/archiveMerge4 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
@@ -1111,16 +1123,17 @@ have the following format:\n \
                                             exact=False,
                                             #infer_datetime_format = True,
                                             origin = 'unix')
-        except:
+        except ValueError as ve:
             print('    WARNING: Problem converting some timestamps from \
 the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+            print(ve)
             df_source[tsName] = pd.to_datetime(df_source[tsName],
                                             errors='coerce',
                                             box = True, 
                                             infer_datetime_format = True,
                                             origin = 'unix')
     # Remove any NaN/NaT values as a result of conversion
-    df_soure.dropna(how='any', inplace=True)
+    df_source.dropna(how='any', inplace=True)
     # Rround the timestamp to the nearest ms. Unseen ns and
     # fractional ms values are not always displayed, and can cause
     # unexpected merge and up/downsample results.
@@ -1155,10 +1168,11 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
             df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am1/archiveMerge1 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
 
         # Drop the time bias (second) column
@@ -1182,16 +1196,17 @@ Unexpected encoding can also cause this error.')
                                                 exact=False,
                                                 #infer_datetime_format = True,
                                                 origin = 'unix')
-            except:
+            except ValueError as ve:
                 print('    WARNING: Problem converting some timestamps from \
     the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+                print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
-        df_soure.dropna(how='any', inplace=True)
+        df_source.dropna(how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
@@ -1237,10 +1252,11 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am2/archiveMerge2\
 parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
@@ -1263,16 +1279,17 @@ Unexpected encoding can also cause this error.')
                                                 exact=False,
                                                 #infer_datetime_format = True,
                                                 origin = 'unix')
-            except:
+            except ValueError as ve:
                 print('    WARNING: Problem converting some timestamps from \
     the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+                print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
-        df_soure.dropna(how='any', inplace=True)
+        df_source.dropna(how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
@@ -1318,10 +1335,11 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am3/archiveMerge3 \
 parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
@@ -1344,16 +1362,17 @@ Unexpected encoding can also cause this error.')
                                                 exact=False,
                                                 #infer_datetime_format = True,
                                                 origin = 'unix')
-            except:
+            except ValueError as ve:
                 print('    WARNING: Problem converting some timestamps from \
     the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+                print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
-        df_soure.dropna(how='any', inplace=True)
+        df_source.dropna(how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
@@ -1400,10 +1419,11 @@ Unexpected encoding can also cause this error.')
             df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
                             delim_whitespace=False, encoding=args.sourceEncoding,
                             header=0, dtype = str, skipinitialspace=True)
-        except:
+        except ValueError as ve:
             print('ERROR opening the file specified with the -am4/archiveMerge4 \
 parameter: "' + args.archiveMerge4+ '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
+            print(ve)
             quit()
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
@@ -1426,16 +1446,17 @@ Unexpected encoding can also cause this error.')
                                                 exact=False,
                                                 #infer_datetime_format = True,
                                                 origin = 'unix')
-            except:
+            except ValueError as ve:
                 print('    WARNING: Problem converting some timestamps from \
     the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+                print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
                                                 box = True, 
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
-        df_soure.dropna(how='any', inplace=True)
+        df_source.dropna(how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
@@ -1569,7 +1590,7 @@ Unexpected encoding can also cause this error.')
             # Appending the data will apply previously specified value queries
             # and time filtering
             instData[idx].appendData(df_valData)
-        except:
+        except ValueError as ve:
             # This instrument is not in the instrument list yet.  
             # Append it to the name list and the object list
             instDataNames.append(instName)
@@ -1684,7 +1705,7 @@ the data unless the resampling option is used.\n')
         df_dateRange = pd.DataFrame({ts_name:pd.date_range(startTime,
                                                            endTime,
                                                            freq=resampleArg)})
-    except:
+    except ValueError as ve:
         print('ERROR: Problem with generated date/time range. Check the \
 resample argument.')
         print('Error: ', sys.exc_info())
@@ -1706,7 +1727,7 @@ resample argument.')
         # create a new file for writing, deleting any existing version
         try:
             outFile = open(args.outputFileName, 'w', encoding=args.destEncoding)
-        except:
+        except ValueError as ve:
             print('ERROR opening the output file. Nothing written.')
             quit()
 
@@ -1764,7 +1785,7 @@ resample argument.')
              df_dest.to_csv(outFile, sep=args.destDelimiter,
                            encoding=args.destEncoding,
                            date_format ='%Y-%b-%d %H:%M:%S')
-        except:
+        except ValueError as ve:
             print('\nERROR writing data to the file. Output file content is suspect.\n')
             print('Error: ', sys.exc_info())
         outFile.close()
