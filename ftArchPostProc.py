@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+#
+# ftArchPostProc.py
+#
 # Final Test Archive Data Post Processing
 # This program accepts an input csv file, post processes it, and creates a csv
 # output file.  An export control message is included at the head of the output
@@ -162,7 +164,6 @@ from dateutil import parser as duparser
 
 # csv file stuff
 import csv
-# not necessarily synchronized.
 
 # arg parser
 import argparse
@@ -172,7 +173,11 @@ import numpy as np
 import pandas as pd
 
 # custom libraries
+# TimeStamped Indexed Data Class
 from TsIdxData import TsIdxData
+# list duplication helper functions
+from listDuplicates import listDuplicates 
+from listDuplicates import listToListIntersection
 
 
 # **** argument parsing
@@ -550,7 +555,12 @@ try:
                         header=None, dtype = str, skipinitialspace=True)
                         # mangle_dupe_cols=False)
     df_source = df_source.rename(columns=df_source.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
+    #TODO: Keep Note?
+    # now remove the duplicated columns
+    # df.columns.duplicated returns a bool array, with "False" if a column name
+    # is unique up to that point, and "True" if it is duplicated. Flip this
+    # using the "~" operator so True means not duplicated.
+    
 except ValueError as ve:
     print('ERROR opening source file: "' + args.inputFileName + '". Check file \
 name, file presence, and permissions. Unexpected encoding can also cause this \
@@ -1398,7 +1408,7 @@ Unexpected encoding can also cause this error.')
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0)
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
         print('**** Merged Data ****')
         print(df_merged)
 
