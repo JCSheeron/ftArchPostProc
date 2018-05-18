@@ -531,9 +531,25 @@ try:
     # use string as the data type for all columns to prevent automatic
     # datatype detection. We don't know ahead of time how many columns are
     # being read in, so we don't yet know the types.
+    # We want duplicate column names to be preserved as in.
+    # They will get filtered out as duplicates later.
+    # The default behavior of read_csv is to append a ".n" to the column name
+    # where n is an integer value starting at 1 and incrementing up for each 
+    # duplicate found. The problem with this is later, this gets interpreted as
+    # a different tag if using some options.
+    # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+    # column names by turning off the mangling described above.
+    # It is "not supported yet" but is in the documentation for 
+    # Pandas 0.22 and maybe earler as being a feature!!
+    # It throws a ValueError if used.  As a work around, don't use 
+    # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+    # read_csv function.  Then manually rename the columns using the 1st row
+    # of the csv.
     df_source = pd.read_csv(args.inputFileName, sep=args.sourceDelimiter,
                         delim_whitespace=False, encoding=args.sourceEncoding,
-                        header=0, dtype = str, skipinitialspace=True)
+                        header=None, dtype = str, skipinitialspace=True)
+                        # mangle_dupe_cols=False)
+    df_source = df_source.rename(columns=df_source.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
 
 except ValueError as ve:
     print('ERROR opening source file: "' + args.inputFileName + '". Check file \
@@ -589,10 +605,26 @@ and the timestamps may or may not be synchronized.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
-            #
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+            
         except ValueError as ve:
             print('ERROR opening the file specified with the -am1/archiveMerge1 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
@@ -623,9 +655,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am2/archiveMerge2\
 parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
@@ -656,9 +705,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am3/archiveMerge3 \
 parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions.  \
@@ -689,9 +755,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am4/archiveMerge4 \
 parameter: "' + args.archiveMerge1+ '".\n Check file name, file presence, and permissions.  \
@@ -818,9 +901,26 @@ not necessarily synchronized.\n')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+            
         except ValueError as ve:
             print('ERROR opening the file specified with the -am1/archiveMerge1 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
@@ -851,9 +951,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am2/archiveMerge2 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
@@ -884,9 +1001,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am3/archiveMerge3 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
@@ -916,9 +1050,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am4/archiveMerge4 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
@@ -1165,9 +1316,26 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am1/archiveMerge1 \
 parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
@@ -1249,9 +1417,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am2/archiveMerge2\
 parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
@@ -1332,9 +1517,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am3/archiveMerge3 \
 parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions.  \
@@ -1416,9 +1618,26 @@ Unexpected encoding can also cause this error.')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each 
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for 
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use 
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function.  Then manually rename the columns using the 1st row
+            # of the csv.
             df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
-                            delim_whitespace=False, encoding=args.sourceEncoding,
-                            header=0, dtype = str, skipinitialspace=True)
+                                delim_whitespace=False, encoding=args.sourceEncoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+
         except ValueError as ve:
             print('ERROR opening the file specified with the -am4/archiveMerge4 \
 parameter: "' + args.archiveMerge4+ '".\n Check file name, file presence, and permissions.  \
