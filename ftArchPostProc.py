@@ -555,11 +555,9 @@ try:
                         header=None, dtype = str, skipinitialspace=True)
                         # mangle_dupe_cols=False)
     df_source = df_source.rename(columns=df_source.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-    #TODO: Keep Note?
-    # now remove the duplicated columns
-    # df.columns.duplicated returns a bool array, with "False" if a column name
-    # is unique up to that point, and "True" if it is duplicated. Flip this
-    # using the "~" operator so True means not duplicated.
+    # NOTE: At this point the source may have duplicate columns. This may be okay
+    # or it may be problematic, depending on the -t, -a, or -n option. Deal with
+    # duplicates below when we check the option.
     
 except ValueError as ve:
     print('ERROR opening source file: "' + args.inputFileName + '". Check file \
@@ -602,7 +600,22 @@ if args.t and len(headerList) >= 2:
     print('\nHistorical Trend Data Specified. The source data is expected to \
 have the following format:\n \
     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2 Value ... \n\
-and the timestamps may or may not be synchronized.')
+and the timestamps may or may not be synchronized.\n')
+    
+    # Deal with duplicates in the input file.
+    # Duplicates with this data format may or may not be problematic since
+    # a tag may be represented more than once, but contain different timestamps.
+    # We don't want to throw away a column just becasue it has a duplicate name.
+    # If the timestamps are duplicated, dups will be dropped after merging.
+    # Detect duplicates and warn.
+    dups = listDuplicates(df_source)
+    if dups:
+        # duplicates have been found.  Notify and continue.
+        print('  WARNING: There are column names duplicated in the input file "' + args.inputFileName + '". \
+This is allowed, but if the duplicate\ncolumn or columns contain duplicate timestamps, \
+then only one value will be retained.\nThe following column names are duplicated:')
+        print(dups)
+        print()
 
     # If there are files specified to merge, merge them with the input file before 
     # further processing. Since this file format has independent time/value pairs
@@ -641,6 +654,31 @@ parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and p
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
+
+        # Deal with duplicates in the merge file.
+        # Detect duplicates and warn.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are column names duplicated in the file "' + args.archiveMerge1 + '" specified with \
+the -am1/archiveMerge1 parameter.\nThis is allowed, but if the duplicate column or columns \
+contain duplicate timestamps, then only one value will be retained. \n \
+The following tags column names are duplicated:')
+            print(dups)
+            print()
+
+        # Deal with duplicates between the source and merge file.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_source, df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated \
+in the file "' + args.archiveMerge1 + '" specified with the -am1/archiveMerge1 parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
+
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
         # This isn't different than in the input file.
@@ -691,6 +729,31 @@ parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and p
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
+
+        # Deal with duplicates in the merge file.
+        # Detect duplicates and warn.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are column names duplicated in the file "' + args.archiveMerge2 + '" specified with \
+the -am2/archiveMerge2 parameter.\nThis is allowed, but if the duplicate column or columns \
+contain duplicate timestamps, then only one value will be retained. \n \
+The following tags column names are duplicated:')
+            print(dups)
+            print()
+
+        # Deal with duplicates between the source and merge file.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_source, df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated \
+in the file "' + args.archiveMerge2 + '" specified with the -am2/archiveMerge2 parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
+
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
         # This isn't different than in the input file.
@@ -741,6 +804,31 @@ parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and p
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
+
+        # Deal with duplicates in the merge file.
+        # Detect duplicates and warn.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates hVave been found.  Notify and continue.
+            print('  WARNING: There are column names duplicated in the file "' + args.archiveMerge3 + '" specified with \
+the -am3/archiveMerge3 parameter.\nThis is allowed, but if the duplicate column or columns \
+contain duplicate timestamps, then only one value will be retained. \n \
+The following tags column names are duplicated:')
+            print(dups)
+            print()
+
+        # Deal with duplicates between the source and merge file.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_source, df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated \
+in the file "' + args.archiveMerge3 + '" specified with the -am3/archiveMerge3 parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
+
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
         # This isn't different than in the input file.
@@ -787,10 +875,35 @@ Unexpected encoding can also cause this error.')
 
         except ValueError as ve:
             print('ERROR opening the file specified with the -am4/archiveMerge4 \
-parameter: "' + args.archiveMerge1+ '".\n Check file name, file presence, and permissions.  \
+parameter: "' + args.archiveMerge4+ '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
+
+        # Deal with duplicates in the merge file.
+        # Detect duplicates and warn.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates hVave been found.  Notify and continue.
+            print('  WARNING: There are column names duplicated in the file "' + args.archiveMerge4 + '" specified with \
+the -am4/archiveMerge4 parameter.\nThis is allowed, but if the duplicate column or columns \
+contain duplicate timestamps, then only one value will be retained. \n \
+The following tags column names are duplicated:')
+            print(dups)
+            print()
+
+        # Deal with duplicates between the source and merge file.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_source, df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated \
+in the file "' + args.archiveMerge4 + '" specified with the -am4/archiveMerge4 parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
+
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
         # This isn't different than in the input file.
@@ -899,6 +1012,19 @@ elif args.a and len(headerList) >= 6:
 follows:\n    TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality\n \
 Where normally there are multiple tags each at multiple timestamps. Timestamps are \
 not necessarily synchronized.\n')
+    
+    # Deal with duplicates in the input file.
+    # Duplicates with this data format within the same file are problematic
+    # because they don't make sense, and are an indicator of invalid source
+    # data. Message out and punt.
+    dups = listDuplicates(df_source)
+    if dups:
+        # duplicates have been found.  Notify leave.
+        print('  ERROR: There are column names duplicated in the input file "' + args.inputFileName + '". \
+This is not allowed with this type of data because it does not make sense.\n \
+There will be further processing.\nThe following column names are duplicated:')
+        print(dups)
+        quit()
 
     # If there are files specified to merge, merge them with the input file before 
     # further processing. Since the file format has rows being unique on 
@@ -937,6 +1063,23 @@ parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and p
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
+    
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they don't make sense, and are an indicator of invalid source
+        # data. Message out and punt.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('  ERROR: There are column names duplicated in the file "' + args.archiveMerge1 + '" specified \
+with the -am1/archiveMerge1 parameter.\nThis is not allowed with this type of data because it does not make sense.\n \
+There will be further processing.\nThe following column names are duplicated:')
+            print(dups)
+            quit()
+
+        # Deal with duplicates between the source and merge file.
+        # This is expected (necessary) with this data type. Nothing to do.
+
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
         df_merged = pd.concat([df_source, df_merge], axis=0, ignore_index=True, join='outer')
@@ -983,10 +1126,27 @@ Unexpected encoding can also cause this error.')
 
         except ValueError as ve:
             print('ERROR opening the file specified with the -am2/archiveMerge2 \
-parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
+parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
+    
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they don't make sense, and are an indicator of invalid source
+        # data. Message out and punt.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('  ERROR: There are column names duplicated in the file "' + args.archiveMerge2 + '" specified \
+with the -am2/archiveMerge2 parameter.\nThis is not allowed with this type of data because it does not make sense.\n \
+There will be further processing.\nThe following column names are duplicated:')
+            print(dups)
+            quit()
+
+        # Deal with duplicates between the source and merge file.
+        # This is expected (necessary) with this data type. Nothing to do.
+
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
         df_merged = pd.concat([df_source, df_merge], axis=0, ignore_index=True, join='outer')
@@ -1033,9 +1193,26 @@ Unexpected encoding can also cause this error.')
 
         except ValueError as ve:
             print('ERROR opening the file specified with the -am3/archiveMerge3 \
-parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
+parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions. \
 Unexpected encoding can also cause this error.')
             quit()
+    
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they don't make sense, and are an indicator of invalid source
+        # data. Message out and punt.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('  ERROR: There are column names duplicated in the file "' + args.archiveMerge3 + '" specified \
+with the -am3/archiveMerge3 parameter.\nThis is not allowed with this type of data because it does not make sense.\n \
+There will be further processing.\nThe following column names are duplicated:')
+            print(dups)
+            quit()
+
+        # Deal with duplicates between the source and merge file.
+        # This is expected (necessary) with this data type. Nothing to do.
+
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
         df_merged = pd.concat([df_source, df_merge], axis=0, ignore_index=True, join='outer')
@@ -1082,10 +1259,27 @@ Unexpected encoding can also cause this error.')
 
         except ValueError as ve:
             print('ERROR opening the file specified with the -am4/archiveMerge4 \
-parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
+parameter: "' + args.archiveMerge4 + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
+    
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they don't make sense, and are an indicator of invalid source
+        # data. Message out and punt.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('  ERROR: There are column names duplicated in the file "' + args.archiveMerge4 + '" specified \
+with the -am4/archiveMerge4 parameter.\nThis is not allowed with this type of data because it does not make sense.\n \
+There will be further processing.\nThe following column names are duplicated:')
+            print(dups)
+            quit()
+
+        # Deal with duplicates between the source and merge file.
+        # This is expected (necessary) with this data type. Nothing to do.
+
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
         df_merged = pd.concat([df_source, df_merge], axis=0, ignore_index=True, join='outer')
@@ -1266,6 +1460,20 @@ have the following format:\n \
     # NOTE: This is needed in the merge sections also!!
     df_source.drop(columns=[headerList[1]], inplace=True, errors='ignore')
 
+    # Deal with duplicates in input file.
+    # Duplicates with this data format within the same file are problematic
+    # because they represent a tag with more than one value at the same timestamp.
+    # While this could be delt with when merging, it is an indication that the
+    # data may not be as expected. Error out so a person needs to take a look.
+    dups = listDuplicates(df_source)
+    if dups:
+        # duplicates have been found.  Notify leave.
+        print('  ERROR: There are column names duplicated in the input file "' + args.inputFileName + '". \
+This is not allowed with this type of data because it usually means ambiguous tag values.\n \
+There will be further processing.\nThe following column names are duplicated:')
+        print(dups)
+        quit()
+
     # Index the source data time stamp column. Since we know this will be the
     # index in this case, do this early so we can take advantage of it later.
     # First make sure the timesamp can be converted to a datetime.
@@ -1355,6 +1563,35 @@ Unexpected encoding can also cause this error.')
 
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
+
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they represent a tag with more than one value at the same timestamp.
+        # While this could be delt with when merging, it is an indication that the
+        # data may not be as expected. Error out so a person needs to take a look.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('  ERROR: There are column names duplicated in the file "' + args.archiveMerge1 + '" specified \
+with the -am1/archiveMerge1 parameter.\nThis is not allowed with this type of data because it usually \
+means tag values would be ambiguous at a given time.\n \
+There will be further processing.\nThe following column names are duplicated:')
+            print(dups)
+            quit()
+
+        # Deal with duplicates between the source and merge file.
+        # With this data format, this may or may not be problematic. If there
+        # are duplicated timestamps, they will get removed after merging.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_source, df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated \
+in the file "' + args.archiveMerge1 + '" specified with the -am1/archiveMerge1 parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
 
         # Index the merge data time stamp column. Since we know this will be the
         # index in this case, do this early so we can take advantage of it later.
@@ -1456,6 +1693,35 @@ Unexpected encoding can also cause this error.')
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
 
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they represent a tag with more than one value at the same timestamp.
+        # While this could be delt with when merging, it is an indication that the
+        # data may not be as expected. Error out so a person needs to take a look.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('  ERROR: There are column names duplicated in the file "' + args.archiveMerge2 + '" specified \
+with the -am2/archiveMerge2 parameter.\nThis is not allowed with this type of data because it usually \
+means tag values would be ambiguous at a given time.\n \
+There will be further processing.\nThe following column names are duplicated:')
+            print(dups)
+            quit()
+
+        # Deal with duplicates between the source and merge file.
+        # With this data format, this may or may not be problematic. If there
+        # are duplicated timestamps, they will get removed after merging.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_source, df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated \
+in the file "' + args.archiveMerge2 + '" specified with the -am2/archiveMerge2 parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
+
         # Index the merge data time stamp column. Since we know this will be the
         # index in this case, do this early so we can take advantage of it later.
         # First make sure the timesamp can be converted to a datetime.
@@ -1555,6 +1821,35 @@ Unexpected encoding can also cause this error.')
             quit()
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
+
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they represent a tag with more than one value at the same timestamp.
+        # While this could be delt with when merging, it is an indication that the
+        # data may not be as expected. Error out so a person needs to take a look.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('  ERROR: There are column names duplicated in the file "' + args.archiveMerge3 + '" specified \
+with the -am3/archiveMerge3 parameter.\nThis is not allowed with this type of data because it usually \
+means tag values would be ambiguous at a given time.\n \
+There will be further processing.\nThe following column names are duplicated:')
+            print(dups)
+            quit()
+
+        # Deal with duplicates between the source and merge file.
+        # With this data format, this may or may not be problematic. If there
+        # are duplicated timestamps, they will get removed after merging.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_source, df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated \
+in the file "' + args.archiveMerge3 + '" specified with the -am3/archiveMerge3 parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
 
         # Index the merge data time stamp column. Since we know this will be the
         # index in this case, do this early so we can take advantage of it later.
@@ -1656,6 +1951,35 @@ Unexpected encoding can also cause this error.')
             quit()
         # Drop the time bias (second) column
         df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
+
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they represent a tag with more than one value at the same timestamp.
+        # While this could be delt with when merging, it is an indication that the
+        # data may not be as expected. Error out so a person needs to take a look.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('  ERROR: There are column names duplicated in the file "' + args.archiveMerge4 + '" specified \
+with the -am4/archiveMerge4 parameter.\nThis is not allowed with this type of data because it usually \
+means tag values would be ambiguous at a given time.\n \
+There will be further processing.\nThe following column names are duplicated:')
+            print(dups)
+            quit()
+
+        # Deal with duplicates between the source and merge file.
+        # With this data format, this may or may not be problematic. If there
+        # are duplicated timestamps, they will get removed after merging.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_source, df_merge)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('  WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated \
+in the file "' + args.archiveMerge4 + '" specified with the -am4/archiveMerge4 parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
 
         # Index the merge data time stamp column. Since we know this will be the
         # index in this case, do this early so we can take advantage of it later.
