@@ -28,8 +28,6 @@
 # Note: The -h, -n, and -a options are mutually exclusive. One and only one must
 # be specified.
 #
-# TODO: Update merge related params
-#
 # Given an input file, the program will produce a *.csv file with the name
 # specified as the outputFileName with the format:
 # Timestamp, Tag1 Value, Tag2 Value ...
@@ -69,17 +67,6 @@
 # -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
 # Merge these named files with the data in the inputFileName before processing.
 # Must have the same format/layout as the input file.
-#
-# -mf or --mergeFill (optional, default='ffill') Merge fill. How to fill missing data
-# when merging files historical trend files (-t option).
-# Options are "ffill" or "pad" to fill from last valid value to the next valid value,
-# "backfill" or "bfill" to fill using the next valid value to back fill a gap, 
-# "value" to use a value specified with the -mv option, or "none" to use
-# np.nan (not a number representation). Ignored if merge files are not specified.
-#
-# -mv or --mergeValue (optional, float, default=-9999.0). Used when -mf option
-# is specified as "value".  Ignored if merge files are not specified or if -mf is
-# not "value"
 #
 # -se or --sourceEncoding (optional, default of "utf-16"). Source file encoding.
 #
@@ -145,8 +132,6 @@
 # off the inclusion of an export control message.  The defaults to false, so a
 # message is included unless this argument is specified.
 # 
-# TODO: Improved Error handling? Testing will tell if this is needed.
-#
 # TODO: Include units. This does not come from the data export. One idea is to
 # use a JSON file to map tag name with units.  Additionally, a JSON file may be
 # used in the archive data (-a option) file to map tag name with ID number. If 
@@ -249,17 +234,6 @@ eplStr="""Final Test Archive Data Post Processing
  Merge these named files with the data in the inputFileName before processing.
  Must have the same format/layout as the input file.
 
- -mf or --mergeFill (optional, default='ffill') Merge fill. How to fill missing data
- when merging files historical trend files (-t option).
- Options are "ffill" or "pad" to fill from last valid value to the next valid value,
- "backfill" or "bfill" to fill using the next valid value to back fill a gap, 
- "value" to use a value specified with the -mv option, or "none" to use
- np.nan (not a number representation). Ignored if merge files are not specified.
-
- -mv or --mergeValue (optional, float, default=-9999.0). Used when -mf option
- is specified as "value".  Ignored if merge files are not specified or if -mf is
- not "value"
-
  -se or --sourceEncoding (optional, default of "utf-16"). Source file encoding.
 
  -sd or --sourceDelimiter (optional, default of ","). Destination file field
@@ -310,7 +284,7 @@ eplStr="""Final Test Archive Data Post Processing
  that other options are supported by the environment, but unexpected sample
  times may result.
 
- -stats' (optional, default='m') Choose which statistics to calculate when
+ -stats (optional, default='m') Choose which statistics to calculate when
  resampling. Ignored if not resampling (-rs must be specified for this option
  to do anything).  Choices are: (V)alue, m(I)n, ma(X), (a)verage/(m)ean,
  and (s)tandard (d)eviation (Note: Std Dev is "s" OR "d", not both.)
@@ -322,7 +296,9 @@ eplStr="""Final Test Archive Data Post Processing
 
  -noExportMsg (optional, default=False). When this argument is used, it turns
  off the inclusion of an export control message.  The defaults to false, so a
- message is included unless this argument is specified. """
+ message is included unless this argument is specified.
+ 
+ -v, --verbose (optional, defalt=False). Increse output Messaging. """
 
 descrStr="Post Processing of historical trend or archive data files."
 parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, \
@@ -345,17 +321,6 @@ parser.add_argument('-am4', '--archiveMerge4', default=None, metavar='', \
                    help='Merge this named file with the data in the \
 inputFileName before processing. Must be used with the -a option. \
 Must have the same format/layout as the input file.')
-parser.add_argument('-mf', '--mergeFill', default='ffill', \
-                    choices=['ffill', 'pad', 'bfill', 'backfill', 'value', 'none'], metavar='', \
-                    help='Merge fill. How to fill missing data when merging files. \
-Options are "ffill" or "pad" to fill from last valid value \
-to the next valid value, "backfill" or "bfill" to fill using the next valid \
-value to back fill a gap, "value" to use a value specified with the -mv option, \
-or "none" to use np.nan (not a number representation). \
-Ignored if merge files are not specified.')
-parser.add_argument('-mv', '--mergeValue', type=float, default=9999.0, metavar='', \
-                    help='Used when -mf option is specified as "value". \
-Ignored if merge files are not specified or if -mf is not "value"')
 parser.add_argument('-sd', '--sourceDelimiter', default=',', metavar='', \
                    help='Source file field delimiter. Default is a comma (\",\").')
 parser.add_argument('-se', '--sourceEncoding', default='utf_16', metavar='', \
@@ -417,6 +382,9 @@ parser.add_argument('-noExportMsg', action='store_true', default=False, \
                     help='Do not include the export control message at the \
 head of the output file when specified.')
 
+parser.add_argument('-v', '--verbose', action='store_true', default=False, \
+                    help='Increase output messages.')
+
 # add -t and -a as a required, but mutually exclusive group
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
@@ -430,30 +398,27 @@ args = parser.parse_args()
 
 # At this point, the arguments will be:
 # Argument          Values      Description
-# args.inputFileName    string  file to get data from
-# args.outputFileName   string  file to write processed data to
-# args.archiveMerge1    string  file to merge with input
-# args.archiveMerge2    string  file to merge with input
-# args.archiveMerge2    string  file to merge with input
-# args.archiveMerge4    string  file to merge with input
-# args.mergeFill        string  method to fill voids in merged file.
-#                               Default is 'ffill'
-# args.mergeValue       float   value to use for voids in merged file if mergeFill is "value".
-#                               Default is 9999.0
-# args.sourceDelimiter  string  Input file field delimiter. Default is ","
-# args.sourceEncoding   string  Input file encoding. Default is utf_16.
-# args.destDelimiter    string  Dest file field delimiter. Default is (",")
-# args.destEncoding     string  Dest file encoding. Default is utf_16.
-# args.valueQuery       string  Optional query of the data
-# args.startTime        string  Optional start date time
-# args.endTime          string  Options end date time
-# args.sourceTimeFormat string  Format string for source data timestamps
-# args.resample         string  Resample period. Default is 'S' or 1 sample/sec.
-# args.stats            string  Stats to calc. Value, min, max, ave, std dev.
+# args.inputFileName    string file to get data from
+# args.outputFileName   string file to write processed data to
+# args.archiveMerge1    string file to merge with input
+# args.archiveMerge2    string file to merge with input
+# args.archiveMerge2    string file to merge with input
+# args.archiveMerge4    string file to merge with input
+# args.sourceDelimiter  string Input file field delimiter. Default is ","
+# args.sourceEncoding   string Input file encoding. Default is utf_16.
+# args.destDelimiter    string Dest file field delimiter. Default is (",")
+# args.destEncoding     string Dest file encoding. Default is utf_16.
+# args.valueQuery       string Optional query of the data
+# args.startTime        string Optional start date time
+# args.endTime          string Options end date time
+# args.sourceTimeFormat string Format string for source data timestamps
+# args.resample         string Resample period. Default is 'S' or 1 sample/sec.
+# args.stats            string Stats to calc. Value, min, max, ave, std dev.
 # args.noExportMsg      True/False Exclude export control message when set
-# args.t                True/False  Historical trend input file type when set
-# args.a                True/False  Archive data input file type when set
-# args.n                True/False  Time Normalized input file type when set.
+# args.verbose          True/False Increase output messaging
+# args.t                True/False Historical trend input file type when set
+# args.a                True/False Archive data input file type when set
+# args.n                True/False Time Normalized input file type when set.
 
 # Put the begin mark here, after the arg parsing, so argument problems are
 # reported first.
@@ -566,8 +531,10 @@ error.')
     print(ve)
     quit()
 
-print('**** Input Data ****')
-print(df_source)
+# print diagnostic info if verbose is set
+if args.verbose:
+    print('**** Input Data ****')
+    print(df_source)
 
 # put source the headers into a list
 headerList = df_source.columns.values.tolist()
@@ -686,10 +653,13 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Merge Data ****')
-        print(df_merge)
-        print('**** Merged Data ****')
-        print(df_merged)
+
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
 
         del df_source
         del df_merge
@@ -761,10 +731,13 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Merge Data ****')
-        print(df_merge)
-        print('**** Merged Data ****')
-        print(df_merged)
+
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
 
         del df_source
         del df_merge
@@ -836,10 +809,13 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Merge Data ****')
-        print(df_merge)
-        print('**** Merged Data ****')
-        print(df_merged)
+
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
 
         del df_source
         del df_merge
@@ -911,10 +887,13 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Merge Data ****')
-        print(df_merge)
-        print('**** Merged Data ****')
-        print(df_merged)
+
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
 
         del df_source
         del df_merge
@@ -1086,12 +1065,14 @@ There will be no further processing.\nThe following column names are duplicated:
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
-        print('**** Merge Data ****')
-        print(df_merge)
-        print('**** Merged Data ****')
-        print(df_merged)
+
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
+
         del df_source
         del df_merge
         df_source = df_merged
@@ -1153,12 +1134,14 @@ There will be no further processing.\nThe following column names are duplicated:
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
-        print('**** Merge Data ****')
-        print(df_merge)
-        print('**** Merged Data ****')
-        print(df_merged)
+
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
+            
         del df_source
         del df_merge
         df_source = df_merged
@@ -1219,12 +1202,14 @@ There will be no further processing.\nThe following column names are duplicated:
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
-        print('**** Merge Data ****')
-        print(df_merge)
-        print('**** Merged Data ****')
-        print(df_merged)
+
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
+            
         del df_source
         del df_merge
         df_source = df_merged
@@ -1286,12 +1271,14 @@ There will be no further processing.\nThe following column names are duplicated:
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
-        print('**** Input Data ****')
-        print(df_source)
-        print('**** Merge Data ****')
-        print(df_merge)
-        print('**** Merged Data ****')
-        print(df_merged)
+        
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
+            
         del df_source
         del df_merge
         df_source = df_merged
@@ -1331,7 +1318,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
 
     
     # Remove any NaN/NaT values as a result of conversion
-    df_valData.dropna(how='any', inplace=True)
+    df_valData.dropna(subset=[headerList[2]], how='any', inplace=True)
     # Rround the timestamp to the nearest ms. Unseen ns and
     # fractional ms values are not always displayed, and can cause
     # unexpected merge and up/downsample results.
@@ -1349,8 +1336,11 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     df_valData.set_index([headerList[0],headerList[2]], inplace=True)
     # sort the index for possible better performance later
     df_valData.sort_index(inplace=True)
-    print('**** df_valData ****')
-    print(df_valData)
+
+    # print diagnostic info if verbose is set
+    if args.verbose:
+        print('**** df_valData ****')
+        print(df_valData)
 
     # Now create a dataframe to hold a unique list of tag ids and tag names.
     df_tagList = df_source.drop(columns=[headerList[2],headerList[3],
@@ -1366,8 +1356,12 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     df_tagList.set_index(headerList[0], inplace=True)
     # sort the index for possible better performance later
     df_tagList.sort_index(inplace=True)
-    print('**** df_tagList ****')
-    print(df_tagList)
+
+    # print diagnostic info if verbose is set
+    if args.verbose:
+        print('**** df_tagList ****')
+        print(df_tagList)
+
     # done with the source data. Delete it.
     del df_source
 
@@ -1402,8 +1396,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
                              df_valData.loc[(instId, ), headerList[4]:], 
                              args.valueQuery, startArg, endArg,
                              sourceTimeFormat, forceColNames=True)
-        print('**** tid_inst ****')
-        print(tid_inst)
         
         # See if instrument is already in the list. If so append the 
         # data to an existing instrument object already in the object list.
@@ -1502,7 +1494,7 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
                                             infer_datetime_format = True,
                                             origin = 'unix')
     # Remove any NaN/NaT values as a result of conversion
-    df_source.dropna(how='any', inplace=True)
+    df_source.dropna(subset=[tsName], how='any', inplace=True)
     # Rround the timestamp to the nearest ms. Unseen ns and
     # fractional ms values are not always displayed, and can cause
     # unexpected merge and up/downsample results.
@@ -1519,8 +1511,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     df_source.set_index(tsName, inplace=True)
     # sort the index for possible better performance later
     df_source.sort_index(inplace=True)
-    print('**** Input Data ****')
-    print(df_source)
     
     # If there are files specified to merge, merge them with the input file before 
     # further processing. This file has times and tags that may match or
@@ -1612,7 +1602,7 @@ There will be no further processing.\nThe following column names are duplicated:
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
-        df_source.dropna(how='any', inplace=True)
+        df_merge.dropna(subset=[tsName], how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
@@ -1646,16 +1636,18 @@ one value will be retained.\nThe following tags are duplicated:')
             print(dups)
             print()
 
-        print('**** Merge Data indexed ****')
-        print(df_merge)
-        
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=1, sort=True)
-        print('**** Merged Data ****')
-        print(df_merged)
-
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=True)
+        
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
+            
         # Drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -1748,7 +1740,7 @@ There will be no further processing.\nThe following column names are duplicated:
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
-        df_source.dropna(how='any', inplace=True)
+        df_merge.dropna(subset=[tsName], how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
@@ -1782,16 +1774,18 @@ one value will be retained.\nThe following tags are duplicated:')
             print(dups)
             print()
 
-        print('**** Merge Data indexed ****')
-        print(df_merge)
-        
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=1, sort=True)
-        print('**** Merged Data ****')
-        print(df_merged)
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=True)
 
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
+            
         # Drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -1884,7 +1878,7 @@ There will be no further processing.\nThe following column names are duplicated:
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
-        df_source.dropna(how='any', inplace=True)
+        df_merge.dropna(subset=[tsName], how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
@@ -1918,16 +1912,18 @@ one value will be retained.\nThe following tags are duplicated:')
             print(dups)
             print()
 
-        print('**** Merge Data indexed ****')
-        print(df_merge)
-        
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=1, sort=True)
-        print('**** Merged Data ****')
-        print(df_merged)
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=True)
 
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
+            
         # Drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -2021,7 +2017,7 @@ There will be no further processing.\nThe following column names are duplicated:
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
-        df_source.dropna(how='any', inplace=True)
+        df_merge.dropna(subset=[tsName], how='any', inplace=True)
         # Rround the timestamp to the nearest ms. Unseen ns and
         # fractional ms values are not always displayed, and can cause
         # unexpected merge and up/downsample results.
@@ -2054,17 +2050,19 @@ but if the duplicate column or columns contain duplicate timestamps, then only \
 one value will be retained.\nThe following tags are duplicated:')
             print(dups)
             print()
-
-        print('**** Merge Data indexed ****')
-        print(df_merge)
         
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=1, sort=True)
-        print('**** Merged Data ****')
-        print(df_merged)
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=True)
 
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_merged)
+            
         # Drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -2082,8 +2080,6 @@ one value will be retained.\nThe following tags are duplicated:')
 
     # Update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
-    print('**** Header List ****')
-    print(headerList)
 
     # Make sure the data is still sorted by time after the merge. This may be 
     # unnecessary, but just in case.
@@ -2144,51 +2140,11 @@ one value will be retained.\nThe following tags are duplicated:')
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
         
-    '''
-        # Create a new dataframe for the instrument and use the above column names.
-        df_valData = pd.DataFrame(data=df_source.iloc[:,idx])
-        # drop rows with NaN values, usually these are from the merge
-        df_valData.dropna(axis=0, how='any', inplace=True)
-        df_valData.columns = [valName]
-        df_valData.index.rename(tsName, inplace=True)
-
-        # change the data type of the value column to a float if needed
-        if 'float64' != df_valData[valName].dtype:
-            # not a float, but it should be. Change the type
-            df_valData[valName] = df_valData[valName].astype('float',errors='ignore')
-        print(' **** df_valData ****')
-        print(df_valData)
-        # Data should already be sorted.
-        
-        # See if instrument is already in the list. If so append the 
-        # data to an existing instrument object already in the object list.
-        # If not, then append a new object with the new data to the name and
-        # object lists.
-        try:
-            # get the index in the name list. If it is present, the instrument
-            # is already present. Append the data. If it isn't present, this 
-            # will throw, and we'll append a new instrument.
-            idx = instDataNames.index(instName)
-            # Appending the data will apply previously specified value queries
-            # and time filtering
-            instData[idx].appendData(df_valData)
-        except ValueError as ve:
-            # This instrument is not in the instrument list yet.  
-            # Append it to the name list and the object list
-            instDataNames.append(instName)
-            # Make an object with the instrument name, labels and data frame
-            # instrument data object, and append it to the list.
-            # Querying of value and filtering of timestamps will happen during
-            # construction of the object
-            instData.append(TsIdxData(instName, tsName, valName, df_valData,
-                                     args.valueQuery, startArg, endArg,
-                                     sourceTimeFormat))
-
-    # The data is now in instData in data frames. Done with the source data. Delete it.
-    del df_source
-    '''
-print(instData)
-quit()
+# Print diagnostic info if verbose is set
+if args.verbose:
+    print('**** List of Instruments ****')
+    print(instData)
+    print()
 
 # **** Determine the earliest start time, the latest end time, and the minimum
 # frequency for the instruments. These will be used to generate the master time
