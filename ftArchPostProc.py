@@ -134,7 +134,9 @@
 # off the inclusion of an export control message.  The defaults to false, so a
 # message is included unless this argument is specified.
 # 
-# TODO: Include units. This does not come from the data export. One idea is to
+# -v, --verbose (optional, defalt=False). Increse output Messaging.
+
+# TODO: Include units??? This does not come from the data export. One idea is to
 # use a JSON file to map tag name with units.  Additionally, a JSON file may be
 # used in the archive data (-a option) file to map tag name with ID number. If 
 # this is the case, then the same JSON file could be used by both the -t and
