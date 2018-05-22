@@ -119,13 +119,14 @@ import pandas as pd
 #    valueQuery
 #       string used to query the source data during construction
 #
-#    columns
-#       dictionary with column names as the key and the data type as a value {col name : datatype, ...}
 #   indexName 
 #       string name of the index
 #
 #   index
 #       an array of data about the index, including the index data, datatype, and name
+#
+#    columns
+#       dictionary with column names as the key and the data type as a value {col name : datatype, ...}
 #
 #    data
 #        a copy of the dataframe
@@ -145,8 +146,6 @@ import pandas as pd
 #     isEmpty
 #       boolean true if data frame is empty
 #
-# TODO: Test appendData method
-# TODO: Test replaceData method
 #
 class TsIdxData(object):
     def __init__(self, name, tsName=None, yName=None, df=None,
@@ -939,6 +938,7 @@ specified query when appending data.')
     @property
     def valueQuery(self):
         return self._vq
+
     @property
     def indexName(self):
         return self._df.index.name

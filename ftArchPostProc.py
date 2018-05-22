@@ -8,6 +8,12 @@
 # output file.  An export control message is included at the head of the output
 # file, unless the -noExportMsg argument is used.
 #
+# Given an input file, the program will produce a *.csv file with the name
+# specified as the outputFileName with the format:
+#   Timestamp, Tag1 Value, Tag2 Value ...
+# where the column names are the tag names, and the columns are
+# ordered by name
+#
 # In the case of a historical trend generated file (the -t command line
 # argument), the data columns are as follows:
 #   Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
@@ -27,10 +33,6 @@
 #
 # Note: The -h, -n, and -a options are mutually exclusive. One and only one must
 # be specified.
-#
-# Given an input file, the program will produce a *.csv file with the name
-# specified as the outputFileName with the format:
-# Timestamp, Tag1 Value, Tag2 Value ...
 #
 # Field delimiters can be specified for the input and output files. The
 # default field delimiter is the comma (","). If another delimiter needs to
@@ -173,6 +175,12 @@ eplStr="""Final Test Archive Data Post Processing
  output file.  An export control message is included at the head of the output
  file, unless the -noExportMsg argument is used.
 
+ Given an input file, the program will produce a *.csv file with the name
+ specified as the outputFileName with the format:
+   Timestamp, Tag1 Value, Tag2 Value ...
+ where the column names are the tag names, and the columns are
+ ordered by name
+
  In the case of a historical trend generated file (the -t command line
  argument), the data columns are as follows:
      Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
@@ -192,10 +200,6 @@ eplStr="""Final Test Archive Data Post Processing
 
  Note: The -h, -n, and -a options are mutually exclusive. One and only one must
  be specified.
-
- Given an input file, the program will produce a *.csv file with the name
- specified as the outputFileName with the format:
- Timestamp, Tag1 Value, Tag2 Value ...
 
  Field delimiters can be specified for the input and output files. The
  default field delimiter is the comma (","). If another delimiter needs to
@@ -647,9 +651,9 @@ then only one value will be retained.\nThe following tags are duplicated:')
             print()
 
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
-        # There may be NaN values present when/if columns are different length. 
+        # There may be NaN values present when/if columns are diffenrent length. 
         # This isn't different than in the input file.
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -727,7 +731,7 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
         # This isn't different than in the input file.
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -805,7 +809,7 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
         # This isn't different than in the input file.
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -883,7 +887,7 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are different length. 
         # This isn't different than in the input file.
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer')
+        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -1061,7 +1065,8 @@ There will be no further processing.\nThe following column names are duplicated:
 
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
-        df_merged = pd.concat([df_source, df_merge], axis=0, ignore_index=True, join='outer')
+        df_merged = pd.concat([df_source, df_merge], axis=0, 
+                              ignore_index=True, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -1130,7 +1135,8 @@ There will be no further processing.\nThe following column names are duplicated:
 
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
-        df_merged = pd.concat([df_source, df_merge], axis=0, ignore_index=True, join='outer')
+        df_merged = pd.concat([df_source, df_merge], axis=0, \
+                              ignore_index=True, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -1198,7 +1204,8 @@ There will be no further processing.\nThe following column names are duplicated:
 
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
-        df_merged = pd.concat([df_source, df_merge], axis=0, ignore_index=True, join='outer')
+        df_merged = pd.concat([df_source, df_merge], axis=0, \
+                              ignore_index=True, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -1267,7 +1274,8 @@ There will be no further processing.\nThe following column names are duplicated:
 
         # Now merge the data. Append rows (axis = 0), ignoring overlapping 
         # index (row numbers)
-        df_merged = pd.concat([df_source, df_merge], axis=0, ignore_index=True, join='outer')
+        df_merged = pd.concat([df_source, df_merge], axis=0, \
+                              ignore_index=True, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -1639,7 +1647,7 @@ one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0, sort=True)
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
         
         # print diagnostic info if verbose is set
         if args.verbose:
@@ -1777,7 +1785,7 @@ one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0, sort=True)
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
 
         # print diagnostic info if verbose is set
         if args.verbose:
@@ -1915,7 +1923,7 @@ one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0, sort=True)
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
 
         # print diagnostic info if verbose is set
         if args.verbose:
@@ -2054,7 +2062,7 @@ one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0, sort=True)
+        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
 
         # print diagnostic info if verbose is set
         if args.verbose:
@@ -2139,6 +2147,16 @@ one value will be retained.\nThe following tags are duplicated:')
 
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
+
+# As long as there is an instrument list,
+# sort the instrument list by instrument name.
+# This is done here, so just the list is mutated,
+# and possibly large datasets aren't being changed.
+# Sort based on the last name version of the names, so the 
+# sort order is case insensitive.
+# Do this here so it can be printed this way in verbose mode.
+if instData:
+    instData.sort(key=lambda x: x.name.lower())
         
 # Print diagnostic info if verbose is set
 if args.verbose:
