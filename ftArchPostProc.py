@@ -101,12 +101,11 @@
 # argument is not used, the end time is derived from the data, and the latest
 # of all the data timestamps is used.
 #
-# -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %I:%M:%S %p")
+# -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %H:%M:%S.%f")
 # Specify the format of the source data time format,
-# as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
-# year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M
-# minutes, %S seconds, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
-# The default string is "%m/%d/%Y %H:%M:%S.%f".'
+# as a string. Use the following placeholders: %m month, %d day, %Y 4 digit
+# year, %y two digit year, %H hour (24hr format) %I hour (12 hr format), %M
+# minute, %S second, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
 #
 # -rs or --resample (optional, default=None) Resample the data. This is usually
 # used to "downsample" data. For example, create an output file with 1 sample
@@ -270,12 +269,11 @@ eplStr="""Final Test Archive Data Post Processing
  argument is not used, the end time is derived from the data, and the latest
  of all the data timestamps is used.
 
- -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %I:%M:%S %p")
+ -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %H:%M:%S.%f")
  Specify the format of the source data time format,
- as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
- year, %y two digit year, %H hours (24hr format) %I hours (12 hr format), %M
- minutes, %S seconds, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
- The default string is "%m/%d/%Y %I:%M:%S %p".
+ as a string. Use the following placeholders: %m month, %d day, %Y 4 digit
+ year, %y two digit year, %H hour (24hr format) %I hour (12 hr format), %M
+ minute, %S second, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
 
  -rs or --resample (optional, default=None) Resample the data. This is usually
  used to "downsample" data. For example, create an output file with 1 sample
@@ -356,9 +354,9 @@ derived from the data, and the latest of all the data timestamps is used.')
 parser.add_argument('-stf', '--sourceTimeFormat', \
                     default='%m/%d/%Y %H:%M:%S.%f', metavar='', \
                     help='Specify the format of the source data time format, \
-as a string. Use the following placeholders:%%m minutes, %%d days, %%Y 4 digit \
-year, %%y two digit year, %%H hours (24hr format) %%I hours (12 hr format), %%M \
-minutes, %%S seconds, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
+as a string. Use the following placeholders:%%m month, %%d day, %%Y 4 digit \
+year, %%y two digit year, %%H hour (24hr format) %%I hour (12 hr format), %%M \
+minute, %%S second, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
 The default string is "%%m/%%d/%%Y %%H:%%M:%%S.%%f".')
 parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample the data. This is usually \
