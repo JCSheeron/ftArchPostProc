@@ -160,12 +160,14 @@ import argparse
 import numpy as np
 import pandas as pd
 
-# custom libraries
+# user libraries
+# Note: May need PYTHONPATH (set in ~/.profile?) to be set depending
+# on the location of the imported files
 # TimeStamped Indexed Data Class
-from TsIdxData import TsIdxData
+from bpsTsIdxData import TsIdxData
 # list duplication helper functions
-from listDuplicates import listDuplicates 
-from listDuplicates import listToListIntersection
+from bpsListDuplicates import listDuplicates 
+from bpsListDuplicates import listToListIntersection
 
 
 # **** argument parsing
