@@ -10,26 +10,27 @@
 #
 # Given an input file, the program will produce a *.csv file with the name
 # specified as the outputFileName with the format:
-#   Timestamp, Tag1 Value, Tag2 Value ...
+  # Timestamp, Tag1 Value, Tag2 Value ...
 # where the column names are the tag names, and the columns are
 # ordered by name
-#
-# In the case of a historical trend generated file (the -t command line
-# argument), the data columns are as follows:
-#   Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
-# and the timestamps are not synchronized.
-#
+
+# In the case of a historical trend generated file (the -t command line argument),
+# the data columns are as follows:
+  # Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
+# and the timestamps are not synchronized.  If a time format is not specified
+# with the -stf option, then the format is assumed to be MM-DD-YYYY hh:mm:ss am/pm.
+
 # In the case of a archive export file (the -a command line argument), the data
 # columns are as follows:
-#   TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality
-# Where normally there are multiple tags each at multiple repeating
-# timestamps. Timestamps are not necessarily synchronized.
-#
-# In the case of a time normalized export file (the -n command line argument),
-# the data columns are as follows:
-#   Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
-# where Timestamp is in local time, and the Bias is a time zone adjustment value,
-# in minutes, that gets added to the Timestamp to get UTC.
+  # ValueId,Timestamp,value,quality,flags and there are
+# normally multiple valueIDs each at multiple timestamps. If a time format is not
+# specified with the -stf option, then the format is assumed to be YYYY-MM-DD
+# HH:mm::ss.mmm.
+
+# In the case of a time normalized export file (the -n command line argument), the
+# data columns are as follows: Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ... If
+# a time format is not specified with the -stf option, then the format is assumed
+# to be YYYY-MM-DD HH:mm:ss.mmm.
 #
 # Note: The -h, -n, and -a options are mutually exclusive. One and only one must
 # be specified.
@@ -41,7 +42,7 @@
 # delimiter will be interpreted as a regular expression.
 #
 # File encoding can be specified for the input and output files. The default
-# encoding is "utf-16". If another encoding needs to be specified, it can be
+# encoding is "utf-8". If another encoding needs to be specified, it can be
 # done using the -se, -sourceEncoding, -de, or -destEncoding options.
 #
 # It is assumed that the first row is a header. In the case of a historical
@@ -70,7 +71,7 @@
 # Merge these named files with the data in the inputFileName before processing.
 # Must have the same format/layout as the input file.
 #
-# -se or --sourceEncoding (optional, default of "utf-16"). Source file encoding.
+# -se or --sourceEncoding (optional, default of "utf-8"). Source file encoding.
 #
 # -sd or --sourceDelimiter (optional, default of ","). Destination file field
 # delimiter. Single character or regex.
@@ -78,7 +79,7 @@
 # -dd or --destDelimiter (optional, default of ","). Destination file field
 # delimiter. Single character or regex.
 #
-# -de or --destEncoding (optional, default of "utf-16"). Destination file encoding.
+# -de or --destEncoding (optional, default of "utf-8"). Destination file encoding.
 #
 # -vq or --valueQuery (optional, default=None). Query string used to filter
 # the dataset. Default is empty, so nothing is filtered out. Use "val" to
@@ -101,11 +102,11 @@
 # argument is not used, the end time is derived from the data, and the latest
 # of all the data timestamps is used.
 #
-# -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %H:%M:%S.%f")
-# Specify the format of the source data time format,
-# as a string. Use the following placeholders: %m month, %d day, %Y 4 digit
-# year, %y two digit year, %H hour (24hr format) %I hour (12 hr format), %M
-# minute, %S second, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
+# -stf or --sourceTimeFormat (optional, default=None) Specify the format of the
+# source data time format, as a string. Use the following placeholders: %m minutes,
+# %d days, %Y 4 digit year, %y two digit year, %H hours (24hr format), %I hours (12
+# hr format), %M minutes, %S seconds, %p AM/PM. If no format is specified, than the
+# format is determined by the -t, -a, or -n option.  
 #
 # -rs or --resample (optional, default=None) Resample the data. This is usually
 # used to "downsample" data. For example, create an output file with 1 sample
@@ -184,22 +185,23 @@ eplStr="""Final Test Archive Data Post Processing
  where the column names are the tag names, and the columns are
  ordered by name
 
- In the case of a historical trend generated file (the -t command line
- argument), the data columns are as follows:
-     Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
- and the timestamps are not synchronized.
+ In the case of a historical trend generated file (the -t command line argument),
+ the data columns are as follows:
+   Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
+ and the timestamps are not synchronized.  If a time format is not specified
+ with the -stf option, then the format is assumed to be MM-DD-YYYY hh:mm:ss am/pm.
 
  In the case of a archive export file (the -a command line argument), the data
  columns are as follows:
-     TagId, TagName, Timestamp (YYYY-MM-DD HH:MM:SS.mmm), DataSource, Value, Quality
- Where normally there are multiple tags each at multiple repeating
- timestamps. Timestamps are not necessarily synchronized.
+   ValueId,Timestamp,value,quality,flags and there are
+ normally multiple valueIDs each at multiple timestamps. If a time format is not
+ specified with the -stf option, then the format is assumed to be YYYY-MM-DD
+ HH:mm::ss.mmm.
 
- In the case of a time normalized export file (the -n command line argument), the data
- columns are as follows:
-     Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
- where Timestamp is in local time, and the Bias is a time zone adjustment value,
- in minutes, that gets added to the Timestamp to get UTC.
+ In the case of a time normalized export file (the -n command line argument), the
+ data columns are as follows: Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ... If
+ a time format is not specified with the -stf option, then the format is assumed
+ to be YYYY-MM-DD HH:mm:ss.mmm.
 
  Note: The -h, -n, and -a options are mutually exclusive. One and only one must
  be specified.
@@ -211,7 +213,7 @@ eplStr="""Final Test Archive Data Post Processing
  delimiter will be interpreted as a regular expression.
 
  File encoding can be specified for the input and output files. The default
- encoding is "utf-16". If another encoding needs to be specified, it can be
+ encoding is "utf-8". If another encoding needs to be specified, it can be
  done using the -se, -sourceEncoding, -de, or -destEncoding options.
 
  It is assumed that the first row is a header. In the case of a historical
@@ -241,7 +243,7 @@ eplStr="""Final Test Archive Data Post Processing
  Merge these named files with the data in the inputFileName before processing.
  Must have the same format/layout as the input file.
 
- -se or --sourceEncoding (optional, default of "utf-16"). Source file encoding.
+ -se or --sourceEncoding (optional, default of "utf-8"). Source file encoding.
 
  -sd or --sourceDelimiter (optional, default of ","). Destination file field
  delimiter. Single character or regex.
@@ -249,7 +251,7 @@ eplStr="""Final Test Archive Data Post Processing
  -dd or --destDelimiter (optional, default of ","). Destination file field
  delimiter. Single character or regex.
 
- -de or --destEncoding (optional, default of "utf-16"). Destination file encoding.
+ -de or --destEncoding (optional, default of "utf-8"). Destination file encoding.
 
  -vq or --valueQuery (optional, default=None). Query string used to filter
  the dataset. Default is empty, so nothing is filtered out. Use "val" to
@@ -271,11 +273,11 @@ eplStr="""Final Test Archive Data Post Processing
  argument is not used, the end time is derived from the data, and the latest
  of all the data timestamps is used.
 
- -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %H:%M:%S.%f")
- Specify the format of the source data time format,
- as a string. Use the following placeholders: %m month, %d day, %Y 4 digit
- year, %y two digit year, %H hour (24hr format) %I hour (12 hr format), %M
- minute, %S second, %f for fractional seconds (e.g. %S.%f), %p AM/PM.
+ -stf or --sourceTimeFormat (optional, default=None) Specify the format of the
+ source data time format, as a string. Use the following placeholders: %m minutes,
+ %d days, %Y 4 digit year, %y two digit year, %H hours (24hr format), %I hours (12
+ hr format), %M minutes, %S seconds, %p AM/PM. If no format is specified, than the
+ format is determined by the -t, -a, or -n option.  
 
  -rs or --resample (optional, default=None) Resample the data. This is usually
  used to "downsample" data. For example, create an output file with 1 sample
@@ -329,12 +331,12 @@ inputFileName before processing. Must be used with the -a option. \
 Must have the same format/layout as the input file.')
 parser.add_argument('-sd', '--sourceDelimiter', default=',', metavar='', \
                    help='Source file field delimiter. Default is a comma (\",\").')
-parser.add_argument('-se', '--sourceEncoding', default='utf_16', metavar='', \
-                   help='Source file encoding. Default is utf_16.')
+parser.add_argument('-se', '--sourceEncoding', default='utf_8', metavar='', \
+                   help='Source file encoding. Default is utf_8.')
 parser.add_argument('-dd', '--destDelimiter', default=',', metavar='', \
                    help='Destination file field delimiter. Default is a comma (\",\").')
-parser.add_argument('-de', '--destEncoding', default='utf_16', metavar='', \
-                   help='Source file encoding. Default is utf_16.')
+parser.add_argument('-de', '--destEncoding', default='utf_8', metavar='', \
+                   help='Source file encoding. Default is utf_8.')
 parser.add_argument('-vq', '--valueQuery', default=None, metavar='', \
                    help='Query string used to filter the dataset. \
 Default is empty, so nothing is filtered out. Use "val" to represent the \
@@ -354,12 +356,13 @@ is specified, the moment before midnight (11:59:59.999) is used so the \
 entire date is included.  If this argument is not used, the end time is \
 derived from the data, and the latest of all the data timestamps is used.')
 parser.add_argument('-stf', '--sourceTimeFormat', \
-                    default='%m/%d/%Y %H:%M:%S.%f', metavar='', \
+                    default=None, metavar='', \
                     help='Specify the format of the source data time format, \
 as a string. Use the following placeholders:%%m month, %%d day, %%Y 4 digit \
 year, %%y two digit year, %%H hour (24hr format) %%I hour (12 hr format), %%M \
 minute, %%S second, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
-The default string is "%%m/%%d/%%Y %%H:%%M:%%S.%%f".')
+If no format is specified, than the format is determined by the -t, -a, or -n \
+option.')
 parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample the data. This is usually \
  used to "downsample" data. For example, create an output file with 1 sample \
@@ -411,9 +414,9 @@ args = parser.parse_args()
 # args.archiveMerge2    string file to merge with input
 # args.archiveMerge4    string file to merge with input
 # args.sourceDelimiter  string Input file field delimiter. Default is ","
-# args.sourceEncoding   string Input file encoding. Default is utf_16.
+# args.sourceEncoding   string Input file encoding. Default is utf_8.
 # args.destDelimiter    string Dest file field delimiter. Default is (",")
-# args.destEncoding     string Dest file encoding. Default is utf_16.
+# args.destEncoding     string Dest file encoding. Default is utf_8.
 # args.valueQuery       string Optional query of the data
 # args.startTime        string Optional start date time
 # args.endTime          string Options end date time
@@ -498,9 +501,21 @@ else:
 # force the stats argument to a lower case string so they are case insensitive.
 stats = str(args.stats).lower()
 
-
-# make sure the source timestamp format argument is a string
-sourceTimeFormat = str(args.sourceTimeFormat)
+# Use the specified argument for stf, or use -t/-a/-n option to 
+# determine the stf
+if args.sourceTimeFormat is not None:
+    # a source time has been specified. Use it over the other defaults
+    # make sure the source timestamp format argument is a string
+    sourceTimeFormat = str(args.sourceTimeFormat)
+elif args.t:
+    # no format specified. Use the default for this option
+    sourceTimeFormat = '%m/%d/%Y %I:%M:%S %p'
+elif args.a:
+    # no format specified. Use the default for this option
+    sourceTimeFormat = '%Y-%m-%d %H:%M:%S.%f'
+elif args.n:
+    # no format specified. Use the default for this option
+    sourceTimeFormat = '%Y-%m-%d %H:%M:%S.%f'
 
 # **** read the csv file into a data frame.  The first row is treated as the header
 try:

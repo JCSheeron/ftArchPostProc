@@ -11,23 +11,26 @@
  where the column names are the tag names, and the columns are
  ordered by name
 
- In the case of a historical trend generated file (the -t command line
- argument), the data columns are as follows:
- Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
- and the timestamps are not synchronized.
+ In the case of a historical trend generated file (the -t command line argument),
+ the data columns are as follows:
+   Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
+ and the timestamps are not synchronized.  If a time format is not specified
+ with the -stf option, then the format is assumed to be MM-DD-YYYY hh:mm:ss am/pm.
 
  In the case of a archive export file (the -a command line argument), the data
  columns are as follows:
- ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags
- and there are normally multiple valueIDs each at multiple timestamps.
+   ValueId,Timestamp,value,quality,flags and there are
+ normally multiple valueIDs each at multiple timestamps. If a time format is not
+ specified with the -stf option, then the format is assumed to be YYYY-MM-DD
+ HH:mm::ss.mmm.
 
- In the case of a time normalized export file (the -n command line argument), the data
- columns are as follows:
- Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ...
+ In the case of a time normalized export file (the -n command line argument), the
+ data columns are as follows: Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ... If
+ a time format is not specified with the -stf option, then the format is assumed
+ to be YYYY-MM-DD HH:mm:ss.mmm.
 
  Note: The -h, -n, and -a options are mutually exclusive. One and only one must
  be specified.
-
 
  Field delimiters can be specified for the input and output files. The
  default field delimiter is the comma (","). If another delimiter needs to
@@ -36,7 +39,7 @@
  delimiter will be interpreted as a regular expression.
 
  File encoding can be specified for the input and output files. The default
- encoding is "utf-16". If another encoding needs to be specified, it can be
+ encoding is "utf-8". If another encoding needs to be specified, it can be
  done using the -se, -sourceEncoding, -de, or -destEncoding options.
 
  It is assumed that the first row is a header. Tag names are derrived from the
@@ -52,19 +55,19 @@
  is a historical trend export file.
  Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
 
- -a (required and mutually exclusive with -t and -n). Input file is a
- archive export file. The format is:
- ValueId,Timestamp (YYYY-MM-DD HH:MM:SS.mmm),value,quality,flags
+ -a (required and mutually exclusive with -t and -n). Input file is a archive
+ export file. The format is:
+ ValueId, Timestamp, value, quality, flags
 
  -n (required and mutuall exclusive with -a and -t). Input file is a time
- normalized file. The format is:
- Timestamp, Tag 1 Value, Tag 2 Value, Tag 3 Value ...
+ normalized file. The format is: Timestamp, Tag 1 Value, Tag 2 Value, Tag 3 Value
+ ...
 
  -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
  Merge these named files with the data in the inputFileName before processing.
  Must have the same format/layout as the input file.
 
- -se or --sourceEncoding (optional, default of "utf-16"). Source file encoding.
+ -se or --sourceEncoding (optional, default of "utf-8). Source file encoding.
 
  -sd or --sourceDelimiter (optional, default of ","). Destination file field
  delimiter. Single character or regex.
@@ -72,7 +75,7 @@
  -dd or --destDelimiter (optional, default of ","). Destination file field
  delimiter. Single character or regex.
 
- -de or --destEncoding (optional, default of "utf-16"). Destination file encoding.
+ -de or --destEncoding (optional, default of "utf-8"). Destination file encoding.
 
  -vq or --valueQuery (optional, default=None). Query string used to filter
  the dataset. Default is empty, so nothing is filtered out. Use "val" to
@@ -95,24 +98,22 @@
  argument is not used, the end time is derived from the data, and the latest
  of all the data timestamps is used.
 
- -stf or --sourceTimeFormat (optional, default="%m/%d/%Y %I:%M:%S %p")
- Specify the format of the source data time format,
- as a string. Use the following placeholders: %m minutes, %d days, %Y 4 digit
- year, %y two digit year, %H hours (24hr format), %I hours (12 hr format), %M
- minutes, %S seconds, %p AM/PM. The default string is "%m/%d/%Y %I:%M:%S %p".'
+ -stf or --sourceTimeFormat (optional, default=None) Specify the format of the
+ source data time format, as a string. Use the following placeholders: %m minutes,
+ %d days, %Y 4 digit year, %y two digit year, %H hours (24hr format), %I hours (12
+ hr format), %M minutes, %S seconds, %p AM/PM. If no format is specified, than the
+ format is determined by the -t, -a, or -n option.  
 
  -rs or --resample (optional, default=None) Resample the data. This is usually
- used to "downsample" data. For example, create an output file with 1 sample
- per minute when given an input file with 1 sample per second. If a period
- longer than the source data sample period is specified, then one value is
- used to represent more than one row in the source file.  In this case, the
- -stats option is used (see below) to specify what statistices are calculated
- for the rolled up values. 
- Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds, and are not
- case sensitive. You can put an integer in front of the option to further
- specify a period. For example, "5S" would be a 5 second sample period. Note
- that other options are supported by the environment, but unexpected sample
- times may result.
+ used to "downsample" data. For example, create an output file with 1 sample per
+ minute when given an input file with 1 sample per second. If a period longer than
+ the source data sample period is specified, then one value is used to represent
+ more than one row in the source file.  In this case, the -stats option is used
+ (see below) to specify what statistices are calculated for the rolled up values.
+ Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds, and are not case
+ sensitive. You can put an integer in front of the option to further specify
+ a period. For example, "5S" would be a 5 second sample period. Note that other
+ options are supported by the environment, but unexpected sample times may result.
 
  -stats' (optional, default='m') Choose which statistics to calculate when
  resampling. Ignored if not resampling (-rs must be specified for this option
@@ -128,13 +129,6 @@
  message is included unless this argument is specified.
 
  -v, --verbose (optional, defalt=False). Increse output Messaging. 
-
- TODO: Include units?? This does not come from the data export. One idea is to
- use a JSON file to map tag name with units.  Additionally, a JSON file may be
- used in the archive data (-a option) file to map tag name with ID number. If 
- this is the case, then the same JSON file could be used by both the -t and
- -a options.
-
 
  Imports:
 
@@ -310,6 +304,4 @@ from dateutil import parser as duparser
 numerical manipulation libraries
 import numpy as np
 import pandas as pd
-
-
 
