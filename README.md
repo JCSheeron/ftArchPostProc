@@ -5,11 +5,14 @@
  output file.  An export control message is included at the head of the output
  file, unless the -noExportMsg argument is used.
 
+ Included is a helper bash script called createExportFiles.sh which needs to be
+ edited for the file name specifics, but is helpful in creating a batch of export
+ files from source csv -a files.
+ 
  Given an input file, the program will produce a *.csv file with the name
- specified as the outputFileName with the format:
-   Timestamp, Tag1 Value, Tag2 Value ...
- where the column names are the tag names, and the columns are
- ordered by name
+ specified as the outputFileName with the format: Timestamp, Tag1 Value, Tag2
+ Value ... where the column names are the tag names, and the columns are ordered
+ by name
 
  In the case of a historical trend generated file (the -t command line argument),
  the data columns are as follows:
@@ -156,6 +159,7 @@
  list duplication helper functions
  from listDuplicates import listDuplicates 
  from listDuplicates import listToListIntersection
+
 
 Details about TsIdxData:
 
