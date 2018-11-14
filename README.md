@@ -7,7 +7,8 @@
 
  Included is a helper bash script called createExportFiles.sh which needs to be
  edited for the file name specifics, but is helpful in creating a batch of export
- files from source csv -a files.
+ files from source csv files.  It takes one command line argument: -t or -a or -n
+ and this argument gets used to run ftpp with the corresponding option.
  
  Given an input file, the program will produce a *.csv file with the name
  specified as the outputFileName with the format: Timestamp, Tag1 Value, Tag2

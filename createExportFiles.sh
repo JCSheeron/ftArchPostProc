@@ -1,7 +1,25 @@
 #!/bin/bash
 
-# This script will run ftArchPostProc with the -a option to create
-# exportable csv data files from raw sql database csv data files.
+# This script will run ftArchPostProc with the -t, -a, or -n option given as
+# the first command line argument. It will create exportable csv data files
+# from raw sql database csv data files.
+
+# Functions
+usage()
+{
+    echo "usage: createExportFiles.sh -t | -a | -n"
+}
+
+# Make sure the first (and only used) argument is an expected one (-t or -a or -n)
+# Create the command based on the command line argument
+case $1 in
+    -t | -a | -n )      ;;
+    "" | -h | --help )  usage
+                        exit
+                        ;;
+    * )                 usage
+                        exit
+esac
 
 # Activate the python environment
 source /home/dataadmin/swDev/python/ftArchPostProc/bin/activate
@@ -9,6 +27,8 @@ source /home/dataadmin/swDev/python/ftArchPostProc/bin/activate
 # get the path of the current script
 # won't work if the script is run or sourced via a symlink
 # In a seperate shell, change to the directory where the script is, and then pwd
+# This is done here for convenience if it is needed later. It may or may not be
+# needed
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 #echo "$SCRIPT_DIR"
 
@@ -66,8 +86,16 @@ do
         # destination file with the exension
         DEST_FILE=$FILE"_ForExport.csv"
 
-        # Create the command
-        FTPP_CMD="ftpp -a $SRC_FILE $DEST_FILE"
+        # Create the command based on the command line argument
+        # The invalid cases were caught above, so no check needed here
+        case $1 in
+            -t )                FTPP_CMD="ftpp -t $SRC_FILE $DEST_FILE"
+                                ;;
+            -a )                FTPP_CMD="ftpp -a $SRC_FILE $DEST_FILE"
+                                ;;
+            -n )                FTPP_CMD="ftpp -n $SRC_FILE $DEST_FILE"
+                                ;;
+        esac
         # echo it for informational purposes
         echo $FTPP_CMD
         # run the cmd
