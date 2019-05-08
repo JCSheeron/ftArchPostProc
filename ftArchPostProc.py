@@ -2310,10 +2310,8 @@ resample argument.')
 ['WARNING - This document contains technical data export of which',
 'is restricted by the Export Administration Regulations (EAR).',
 'Release of this document is only authorized for the use of the',
-'Institute of Plasma Physics the Chinese Academy of Sciences (ASIPP)',
-'the ITER Organization and its duly ratified member nations and their technical',
-'representatives for the development of fusion energy for peaceful purposes',
-'as defined under export license D513109.',
+'ITER Organization and its duly ratified member nations and their technical',
+'representatives for the development of fusion energy for peaceful purposes.',
 'Violations of these export laws and regulations are subject to severe',
 'civil and criminal penalties.\n\n']
 
