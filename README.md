@@ -1,6 +1,6 @@
- ftArchPostProc
+#ftArchPostProc
 
- Final Test Archive Data Post Processing
+ **Final Test Archive Data Post Processing**
  This program accepts an input csv file, post processes it, and creates a csv
  output file.  An export control message is included at the head of the output
  file, unless the -noExportMsg argument is used.
@@ -26,7 +26,7 @@
    ValueId,Timestamp,value,quality,flags and there are
  normally multiple valueIDs each at multiple timestamps. If a time format is not
  specified with the -stf option, then the format is assumed to be YYYY-MM-DD
- HH:mm::ss.mmm.
+ HH:mm:ss.mmm.
 
  In the case of a time normalized export file (the -n command line argument), the
  data columns are as follows: Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ... If
@@ -50,7 +50,7 @@
  first row cell contents.
  
 
- Command line arguments are:
+##Command line arguments are:
  
 	 inputFileName (required, positional). The source data csv file.
 	
@@ -135,35 +135,35 @@
 	
 	 -v, --verbose (optional, defalt=False). Increse output Messaging. 
 
- Imports:
+## Imports:
 
- system related
- import sys
+	system related
+	import sys
+	
+	date and time stuff
+	from datetime import datetime, time
+	from pandas.tseries.frequencies import to_offset
+	from dateutil import parser as duparser
+	
+	csv file stuff
+	import csv
+	
+	arg parser
+	import argparse
+	
+	numerical manipulation libraries
+	import numpy as np
+	import pandas as pd
+	
+	custom libraries
+	TimeStamped Indexed Data Class
+	from TsIdxData import TsIdxData
+	list duplication helper functions
+	from listDuplicates import listDuplicates 
+	from listDuplicates import listToListIntersection
 
- date and time stuff
- from datetime import datetime, time
- from pandas.tseries.frequencies import to_offset
- from dateutil import parser as duparser
 
- csv file stuff
- import csv
-
- arg parser
- import argparse
-
- numerical manipulation libraries
- import numpy as np
- import pandas as pd
-
- custom libraries
- TimeStamped Indexed Data Class
- from TsIdxData import TsIdxData
- list duplication helper functions
- from listDuplicates import listDuplicates 
- from listDuplicates import listToListIntersection
-
-
-Details about TsIdxData:
+##Details about TsIdxData:
 
   Class: TsIdxData
   File: TsIdxData.py
@@ -220,8 +220,10 @@ Details about TsIdxData:
                             %I hours (12 hr format), %M minutes, %S seconds,
                             %f for fractional seconds (e.g. %S.%f), %p AM/PM.
  
-  DATA STRUCTURE NOTES
+###DATA STRUCTURE NOTES
+
     The source data must have the following structure:
+
         Timestamp data: An index or value column must exist
                         labeled with the tsName specified.  This data must be of 
                         type datetime or convertable to datetime. It will
@@ -299,17 +301,17 @@ Details about TsIdxData:
         boolean true if data frame is empty
  
 
-Imports used by TsIdxData
+####Imports used by TsIdxData
 
-system related
-import sys
-
-date and time stuff
-from datetime import datetime, time
-from pandas.tseries.frequencies import to_offset
-from dateutil import parser as duparser
-
-numerical manipulation libraries
-import numpy as np
-import pandas as pd
+	system related
+	import sys
+	
+	date and time stuff
+	from datetime import datetime, time
+	from pandas.tseries.frequencies import to_offset
+	from dateutil import parser as duparser
+	
+	numerical manipulation libraries
+	import numpy as np
+	import pandas as pd
 
