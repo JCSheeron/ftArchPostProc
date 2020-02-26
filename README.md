@@ -10,7 +10,7 @@
  files from source csv files.  It takes one command line argument: -t or -a or -n
  and this argument gets used to run ftpp with the corresponding option.
  
- Given an input file, the program will produce a *.csv file with the name
+ Given an input file, the program will produce a .csv file with the name
  specified as the outputFileName with the format: Timestamp, Tag1 Value, Tag2
  Value ... where the column names are the tag names, and the columns are ordered
  by name
@@ -51,6 +51,7 @@
  
 
  Command line arguments are:
+ 
  inputFileName (required, positional). The source data csv file.
 
  outputFileName (required, positional). The .csv output file name.
@@ -184,6 +185,7 @@ Details about TsIdxData:
   The constructor is expecting a data frame which is used as the source data.
  
   The constructor (ctor) has these areguments:
+
     name -- The name to give the object. An instrument name for example.
  
     tsName -- The name of the timestamp (index) column.
@@ -258,7 +260,8 @@ Details about TsIdxData:
  
   The member data can be replaced using the replaceData(dataframe) method.
  
-  The following read only properties are implemented
+  The following read only properties are implemented:
+
      name
         string -- object name
  
