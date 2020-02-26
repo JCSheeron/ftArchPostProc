@@ -52,88 +52,88 @@
 
  Command line arguments are:
  
- inputFileName (required, positional). The source data csv file.
-
- outputFileName (required, positional). The .csv output file name.
-
- -t, (required and mutually exclusive with -a).  Input file
- is a historical trend export file.
- Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
-
- -a (required and mutually exclusive with -t and -n). Input file is a archive
- export file. The format is:
- ValueId, Timestamp, value, quality, flags
-
- -n (required and mutuall exclusive with -a and -t). Input file is a time
- normalized file. The format is: Timestamp, Tag 1 Value, Tag 2 Value, Tag 3 Value
- ...
-
- -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
- Merge these named files with the data in the inputFileName before processing.
- Must have the same format/layout as the input file.
-
- -se or --sourceEncoding (optional, default of "utf-8). Source file encoding.
-
- -sd or --sourceDelimiter (optional, default of ","). Destination file field
- delimiter. Single character or regex.
-
- -dd or --destDelimiter (optional, default of ","). Destination file field
- delimiter. Single character or regex.
-
- -de or --destEncoding (optional, default of "utf-8"). Destination file encoding.
-
- -vq or --valueQuery (optional, default=None). Query string used to filter
- the dataset. Default is empty, so nothing is filtered out. Use "val" to
- represent the process value(s). For example, to filter out all
- values < 0 or > 100,you want to keep everything else, so the filter string
- would be:
- "val >= 0 and val <= 100".
-
- -st or --startTime (optional, default=None)
- Specify a start date and time. If a time and no date is specified, the
- current date is used.  If a date and no time is specified, midnight is
- used so the entire date is included.  If this argument is not used, the 
- start time is derived from the data, and the earliest of all the data
- timestamps is used.
-
- -et or --endTime (optional, default=None)
- Specify an end date and time. If a time and no date is specified, the
- current date is used.  If a date and no time is specified, the moment before
- midnight (11:59:59.999) is used so the  entire date is included.  If this
- argument is not used, the end time is derived from the data, and the latest
- of all the data timestamps is used.
-
- -stf or --sourceTimeFormat (optional, default=None) Specify the format of the
- source data time format, as a string. Use the following placeholders: %m minutes,
- %d days, %Y 4 digit year, %y two digit year, %H hours (24hr format), %I hours (12
- hr format), %M minutes, %S seconds, %p AM/PM. If no format is specified, than the
- format is determined by the -t, -a, or -n option.  
-
- -rs or --resample (optional, default=None) Resample the data. This is usually
- used to "downsample" data. For example, create an output file with 1 sample per
- minute when given an input file with 1 sample per second. If a period longer than
- the source data sample period is specified, then one value is used to represent
- more than one row in the source file.  In this case, the -stats option is used
- (see below) to specify what statistices are calculated for the rolled up values.
- Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds, and are not case
- sensitive. You can put an integer in front of the option to further specify
- a period. For example, "5S" would be a 5 second sample period. Note that other
- options are supported by the environment, but unexpected sample times may result.
-
- -stats' (optional, default='m') Choose which statistics to calculate when
- resampling. Ignored if not resampling (-rs must be specified for this option
- to do anything).  Choices are: (V)alue, m(I)n, ma(X), (a)verage/(m)ean,
- and (s)tandard deviation. Choices are not case sensitive. Default is 
- average/mean.  In the case of the Value option, the first value available
- which is on or after the timestamp is shown. The values between this and the
- next sample point are thrown away. For the other options, the intermediate
- values are used to calculate the statistic.
-
- -noExportMsg (optional, default=False). When this argument is used, it turns
- off the inclusion of an export control message.  The defaults to false, so a
- message is included unless this argument is specified.
-
- -v, --verbose (optional, defalt=False). Increse output Messaging. 
+	 inputFileName (required, positional). The source data csv file.
+	
+	 outputFileName (required, positional). The .csv output file name.
+	
+	 -t, (required and mutually exclusive with -a).  Input file
+	 is a historical trend export file.
+	 Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
+	
+	 -a (required and mutually exclusive with -t and -n). Input file is a archive
+	 export file. The format is:
+	 ValueId, Timestamp, value, quality, flags
+	
+	 -n (required and mutuall exclusive with -a and -t). Input file is a time
+	 normalized file. The format is: Timestamp, Tag 1 Value, Tag 2 Value, Tag 3 Value
+	 ...
+	
+	 -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
+	 Merge these named files with the data in the inputFileName before processing.
+	 Must have the same format/layout as the input file.
+	
+	 -se or --sourceEncoding (optional, default of "utf-8). Source file encoding.
+	
+	 -sd or --sourceDelimiter (optional, default of ","). Destination file field
+	 delimiter. Single character or regex.
+	
+	 -dd or --destDelimiter (optional, default of ","). Destination file field
+	 delimiter. Single character or regex.
+	
+	 -de or --destEncoding (optional, default of "utf-8"). Destination file encoding.
+	
+	 -vq or --valueQuery (optional, default=None). Query string used to filter
+	 the dataset. Default is empty, so nothing is filtered out. Use "val" to
+	 represent the process value(s). For example, to filter out all
+	 values < 0 or > 100,you want to keep everything else, so the filter string
+	 would be:
+	 "val >= 0 and val <= 100".
+	
+	 -st or --startTime (optional, default=None)
+	 Specify a start date and time. If a time and no date is specified, the
+	 current date is used.  If a date and no time is specified, midnight is
+	 used so the entire date is included.  If this argument is not used, the 
+	 start time is derived from the data, and the earliest of all the data
+	 timestamps is used.
+	
+	 -et or --endTime (optional, default=None)
+	 Specify an end date and time. If a time and no date is specified, the
+	 current date is used.  If a date and no time is specified, the moment before
+	 midnight (11:59:59.999) is used so the  entire date is included.  If this
+	 argument is not used, the end time is derived from the data, and the latest
+	 of all the data timestamps is used.
+	
+	 -stf or --sourceTimeFormat (optional, default=None) Specify the format of the
+	 source data time format, as a string. Use the following placeholders: %m minutes,
+	 %d days, %Y 4 digit year, %y two digit year, %H hours (24hr format), %I hours (12
+	 hr format), %M minutes, %S seconds, %p AM/PM. If no format is specified, than the
+	 format is determined by the -t, -a, or -n option.  
+	
+	 -rs or --resample (optional, default=None) Resample the data. This is usually
+	 used to "downsample" data. For example, create an output file with 1 sample per
+	 minute when given an input file with 1 sample per second. If a period longer than
+	 the source data sample period is specified, then one value is used to represent
+	 more than one row in the source file.  In this case, the -stats option is used
+	 (see below) to specify what statistices are calculated for the rolled up values.
+	 Options are (D)ay, (H)our, minu(T)e, (S)econd, mi(L)liseconds, and are not case
+	 sensitive. You can put an integer in front of the option to further specify
+	 a period. For example, "5S" would be a 5 second sample period. Note that other
+	 options are supported by the environment, but unexpected sample times may result.
+	
+	 -stats' (optional, default='m') Choose which statistics to calculate when
+	 resampling. Ignored if not resampling (-rs must be specified for this option
+	 to do anything).  Choices are: (V)alue, m(I)n, ma(X), (a)verage/(m)ean,
+	 and (s)tandard deviation. Choices are not case sensitive. Default is 
+	 average/mean.  In the case of the Value option, the first value available
+	 which is on or after the timestamp is shown. The values between this and the
+	 next sample point are thrown away. For the other options, the intermediate
+	 values are used to calculate the statistic.
+	
+	 -noExportMsg (optional, default=False). When this argument is used, it turns
+	 off the inclusion of an export control message.  The defaults to false, so a
+	 message is included unless this argument is specified.
+	
+	 -v, --verbose (optional, defalt=False). Increse output Messaging. 
 
  Imports:
 
