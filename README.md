@@ -1,4 +1,4 @@
-#ftArchPostProc
+# ftArchPostProc
 
  **Final Test Archive Data Post Processing**
  This program accepts an input csv file, post processes it, and creates a csv
@@ -50,7 +50,7 @@
  first row cell contents.
  
 
-##Command line arguments are:
+## Command line arguments are:
  
 	 inputFileName (required, positional). The source data csv file.
 	
@@ -163,7 +163,7 @@
 	from listDuplicates import listToListIntersection
 
 
-##Details about TsIdxData:
+## Details about TsIdxData:
 
   Class: TsIdxData
   File: TsIdxData.py
@@ -220,7 +220,7 @@
                             %I hours (12 hr format), %M minutes, %S seconds,
                             %f for fractional seconds (e.g. %S.%f), %p AM/PM.
  
-###DATA STRUCTURE NOTES
+### Data Structure Notes
 
     The source data must have the following structure:
 
@@ -241,7 +241,7 @@
  
   In addition the data can be resampled, using the resample(args, stats) method.
   Resampling makes the most sense when the original data has time stamps at 
-  regular intervals, and the interval needs# to be changed.
+  regular intervals, and the interval needs to be changed.
   If the data is being upsampled (increase the frequency),
   than values will be forward filled to populate gaps in the data. If the data
   is being downsampled (decrease in frequency), then the specified stats will
@@ -301,7 +301,7 @@
         boolean true if data frame is empty
  
 
-####Imports used by TsIdxData
+#### Imports used by TsIdxData
 
 	system related
 	import sys
