@@ -273,10 +273,16 @@
      valueQuery
         string used to query the source data during construction
  
-    indexName 
+     startQuery
+        datetime string used to filter the start of the dataset
+
+     endQuery
+        datetime string used to filter the end of the dataset
+
+     indexName 
         string name of the index
  
-    index
+     index
         an array of data about the index, including the index data, datatype, and name
  
      columns
@@ -288,17 +294,17 @@
      timeOffset
          time period between data samples
  
-      startTs
-          start time filter used to query the source data during construction
-     
-      endTs
-         end time filter used to query the source data during construction 
+     startTs
+         the first time stamp associated with the data (the start time)
+
+     endTs
+         the last time stamp associated with the data (the end time)
  
-      count
+     count
          the number of rows in the data frame 
  
-      isEmpty
-        boolean true if data frame is empty
+     isEmpty
+         boolean true if data frame is empty
  
 
 #### Imports used by TsIdxData
