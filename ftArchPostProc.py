@@ -542,7 +542,8 @@ if args.sourceTimeFormat is not None:
     sourceTimeFormat = str(args.sourceTimeFormat)
 elif args.t:
     # no format specified. Use the default for this option
-    sourceTimeFormat = '%m/%d/%Y %I:%M:%S %p'
+    #sourceTimeFormat = '%m/%d/%Y %I:%M:%S %p'
+    sourceTimeFormat = '%Y-%m-%d %H:%M:%S.%f'
 elif args.a:
     # no format specified. Use the default for this option
     sourceTimeFormat = '%Y-%m-%d %H:%M:%S.%f'
@@ -649,14 +650,12 @@ then only one value will be retained.\nThe following column names are duplicated
         print(dups)
         print()
 
-    # If there are files specified to merge, merge them with the input file before
-    # further processing. Since this file format has independent time/value pairs
-    # in columns going to the right, this merge simply makes the source data wider
-    # by appending columns (pd.concat with axis=1).
-    # Merge File 1
-    if args.archiveMerge1 is not None:
+    # Define a function to merge specified files. Put the internal definition
+    # here, as if only pertains to this file type, and so it can be seen
+    # before use
+    def aMerge(fileToMerge, sep, encoding, df_src):
         try:
-            print('Merging file "' + args.archiveMerge1 + '".\n')
+            print('Merging file "' + fileToMerge + '".\n')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
@@ -674,15 +673,15 @@ then only one value will be retained.\nThe following column names are duplicated
             # mangle_dupe_cols=False, and use header=None instead of header=0 in the
             # read_csv function.  Then manually rename the columns using the 1st row
             # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
+            df_merge = pd.read_csv(fileToMerge, sep=sep,
+                                delim_whitespace=False, encoding=encoding,
                                 header=None, dtype = str, skipinitialspace=True)
                                 # mangle_dupe_cols=False)
             df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
 
         except ValueError as ve:
-            print('ERROR opening the file specified with the -am1/archiveMerge1 \
-parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
+            print('ERROR when trying to merge: "' + fileToMerge + '".\n \
+Error opening file. Check file name, file presence, and permissions. \
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
@@ -692,8 +691,8 @@ Unexpected encoding can also cause this error.')
         dups = listDuplicates(df_merge)
         if dups:
             # duplicates have been found.  Notify and continue.
-            print('    WARNING: There are column names duplicated in the file "' + args.archiveMerge1 + '" specified with \
-the -am1/archiveMerge1 parameter.\nThis is allowed, but if the duplicate column or columns \
+            print('    WARNING: There are column names duplicated in the file "' + fileToMerge + '.\n \
+This is allowed, but if the duplicate column or columns \
 contain duplicate timestamps, then only one value will be retained. \n \
 The following tags column names are duplicated:')
             print(dups)
@@ -701,11 +700,11 @@ The following tags column names are duplicated:')
 
         # Deal with duplicates between the source and merge file.
         # Detect duplicates and warn.
-        dups = listToListIntersection(df_source, df_merge)
+        dups = listToListIntersection(df_src, df_merge)
         if dups:
             # duplicates have been found.  Notify and continue.
             print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
-in the file "' + args.archiveMerge1 + '" specified with the -am1/archiveMerge1 parameter.\n\
+in the merge file "' + fileToMerge + '".\n\
 This is allowed, but if the duplicate column or columns contain duplicate timestamps,\n\
 then only one value will be retained.\nThe following tags are duplicated:')
             print(dups)
@@ -714,7 +713,7 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are diffenrent length.
         # This isn't different than in the input file.
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer', sort=False)
+        df_merged = pd.concat([df_src, df_merge], axis=1, join='outer', sort=False)
         # drop the source and make the merged data the new source, then drop the merged data
         # This is so follow on code always has a valid df_source to work with, just as if
         # no files were merged.
@@ -726,244 +725,31 @@ then only one value will be retained.\nThe following tags are duplicated:')
             print('**** Merged Data ****')
             print(df_merged)
 
-        del df_source
+        del df_src
         del df_merge
-        df_source = df_merged
+        df_src = df_merged
         del df_merged
 
-# Merge File 2
+
+    # If there are files specified to merge, merge them with the input file before
+    # further processing. Since this file format has independent time/value pairs
+    # in columns going to the right, this merge simply makes the source data wider
+    # by appending columns (pd.concat with axis=1).
+    # Merge File 1
+    if args.archiveMerge1 is not None:
+        aMerge(args.archiveMerge1, sep=args.sourceDelimiter, encoding=args.sourceEncoding, df_src=df_source)
+
+    # Merge File 2
     if args.archiveMerge2 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge2 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am2/archiveMerge2\
-parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
-Unexpected encoding can also cause this error.')
-            print(ve)
-            quit()
-
-        # Deal with duplicates in the merge file.
-        # Detect duplicates and warn.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates have been found.  Notify and continue.
-            print('    WARNING: There are column names duplicated in the file "' + args.archiveMerge2 + '" specified with \
-the -am2/archiveMerge2 parameter.\nThis is allowed, but if the duplicate column or columns \
-contain duplicate timestamps, then only one value will be retained. \n \
-The following tags column names are duplicated:')
-            print(dups)
-            print()
-
-        # Deal with duplicates between the source and merge file.
-        # Detect duplicates and warn.
-        dups = listToListIntersection(df_source, df_merge)
-        if dups:
-            # duplicates have been found.  Notify and continue.
-            print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
-in the file "' + args.archiveMerge2 + '" specified with the -am2/archiveMerge2 parameter.\n\
-This is allowed, but if the duplicate column or columns contain duplicate timestamps,\n\
-then only one value will be retained.\nThe following tags are duplicated:')
-            print(dups)
-            print()
-
-        # Now merge the data. Append columns (axis = 1), keeping the header rows.
-        # There may be NaN values present when/if columns are different length.
-        # This isn't different than in the input file.
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer', sort=False)
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
+        aMerge(args.archiveMerge2, sep=args.sourceDelimiter, encoding=args.sourceEncoding, df_src=f_source)
 
     # Merge File 3
     if args.archiveMerge3 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge3 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am3/archiveMerge3 \
-parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions.  \
-Unexpected encoding can also cause this error.')
-            print(ve)
-            quit()
-
-        # Deal with duplicates in the merge file.
-        # Detect duplicates and warn.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates hVave been found.  Notify and continue.
-            print('    WARNING: There are column names duplicated in the file "' + args.archiveMerge3 + '" specified with \
-the -am3/archiveMerge3 parameter.\nThis is allowed, but if the duplicate column or columns \
-contain duplicate timestamps, then only one value will be retained. \n \
-The following tags column names are duplicated:')
-            print(dups)
-            print()
-
-        # Deal with duplicates between the source and merge file.
-        # Detect duplicates and warn.
-        dups = listToListIntersection(df_source, df_merge)
-        if dups:
-            # duplicates have been found.  Notify and continue.
-            print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
-in the file "' + args.archiveMerge3 + '" specified with the -am3/archiveMerge3 parameter.\n\
-This is allowed, but if the duplicate column or columns contain duplicate timestamps,\n\
-then only one value will be retained.\nThe following tags are duplicated:')
-            print(dups)
-            print()
-
-        # Now merge the data. Append columns (axis = 1), keeping the header rows.
-        # There may be NaN values present when/if columns are different length.
-        # This isn't different than in the input file.
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer', sort=False)
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
+        aMerge(args.archiveMerge3, sep=args.sourceDelimiter, encoding=args.sourceEncoding, df_src=df_source)
 
     # Merge File 4
     if args.archiveMerge4 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge4 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am4/archiveMerge4 \
-parameter: "' + args.archiveMerge4+ '".\n Check file name, file presence, and permissions.  \
-Unexpected encoding can also cause this error.')
-            print(ve)
-            quit()
-
-        # Deal with duplicates in the merge file.
-        # Detect duplicates and warn.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates hVave been found.  Notify and continue.
-            print('    WARNING: There are column names duplicated in the file "' + args.archiveMerge4 + '" specified with \
-the -am4/archiveMerge4 parameter.\nThis is allowed, but if the duplicate column or columns \
-contain duplicate timestamps, then only one value will be retained. \n \
-The following tags column names are duplicated:')
-            print(dups)
-            print()
-
-        # Deal with duplicates between the source and merge file.
-        # Detect duplicates and warn.
-        dups = listToListIntersection(df_source, df_merge)
-        if dups:
-            # duplicates have been found.  Notify and continue.
-            print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
-in the file "' + args.archiveMerge4 + '" specified with the -am4/archiveMerge4 parameter.\n\
-This is allowed, but if the duplicate column or columns contain duplicate timestamps,\n\
-then only one value will be retained.\nThe following tags are duplicated:')
-            print(dups)
-            print()
-
-        # Now merge the data. Append columns (axis = 1), keeping the header rows.
-        # There may be NaN values present when/if columns are different length.
-        # This isn't different than in the input file.
-        df_merged = pd.concat([df_source, df_merge], axis=1, join='outer', sort=False)
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
+        aMerge(args.archiveMerge4, sep=args.sourceDelimiter, encoding=args.sourceEncoding, df_src=df_source)
 
     # update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
