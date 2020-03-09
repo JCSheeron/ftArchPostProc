@@ -543,7 +543,7 @@ if args.sourceTimeFormat is not None:
 elif args.t:
     # no format specified. Use the default for this option
     #sourceTimeFormat = '%m/%d/%Y %I:%M:%S %p'
-    sourceTimeFormat = '%Y-%m-%d %H:%M:%S.%f'
+    sourceTimeFormat = '%m/%d/%Y %H:%M:%S.%f'
 elif args.a:
     # no format specified. Use the default for this option
     sourceTimeFormat = '%Y-%m-%d %H:%M:%S.%f'
@@ -725,11 +725,14 @@ then only one value will be retained.\nThe following tags are duplicated:')
             print('**** Merged Data ****')
             print(df_merged)
 
-        del df_src
-        del df_merge
-        df_src = df_merged
-        del df_merged
-
+        ## replace the old data with the merged data
+        #df_src = []
+        #df_src[:] = list(df_merged)
+        #print('***')
+        #print(df_src)
+        ##del df_merge
+        ##del df_merged
+        return df_merged
 
     # If there are files specified to merge, merge them with the input file before
     # further processing. Since this file format has independent time/value pairs
@@ -737,19 +740,23 @@ then only one value will be retained.\nThe following tags are duplicated:')
     # by appending columns (pd.concat with axis=1).
     # Merge File 1
     if args.archiveMerge1 is not None:
-        aMerge(args.archiveMerge1, sep=args.sourceDelimiter, encoding=args.sourceEncoding, df_src=df_source)
+        df_source = aMerge(args.archiveMerge1, sep=args.sourceDelimiter,
+                            encoding=args.sourceEncoding, df_src=df_source)
 
     # Merge File 2
     if args.archiveMerge2 is not None:
-        aMerge(args.archiveMerge2, sep=args.sourceDelimiter, encoding=args.sourceEncoding, df_src=f_source)
+        df_source = aMerge(args.archiveMerge2, sep=args.sourceDelimiter,
+                            encoding=args.sourceEncoding, df_src=df_source)
 
     # Merge File 3
     if args.archiveMerge3 is not None:
-        aMerge(args.archiveMerge3, sep=args.sourceDelimiter, encoding=args.sourceEncoding, df_src=df_source)
+        df_source = aMerge(args.archiveMerge3, sep=args.sourceDelimiter,
+                            encoding=args.sourceEncoding, df_src=df_source)
 
     # Merge File 4
     if args.archiveMerge4 is not None:
-        aMerge(args.archiveMerge4, sep=args.sourceDelimiter, encoding=args.sourceEncoding, df_src=df_source)
+        df_source = aMerge(args.archiveMerge4, sep=args.sourceDelimiter,
+                            encoding=args.sourceEncoding, df_src=df_source)
 
     # update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
