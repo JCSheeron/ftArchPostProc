@@ -482,7 +482,7 @@ if args.startTime is not None:
     try:
         startArg = duparser.parse(args.startTime, fuzzy=True)
         # convert to a pandas datetime for max compatibility
-        startArg = pd.to_datetime(startArg, errors='raise', box=True,
+        startArg = pd.to_datetime(startArg, errors='raise',
                                   infer_datetime_format=True, origin='unix')
     except ValueError as ve:
         # not convertable ... invalid ... ignore
@@ -499,7 +499,7 @@ if args.endTime is not None:
     try:
         endArg = duparser.parse(args.endTime, fuzzy=True)
         # convert to a pandas datetime for max compatibility
-        endArg = pd.to_datetime(endArg, errors='raise', box=True,
+        endArg = pd.to_datetime(endArg, errors='raise',
                                   infer_datetime_format=True, origin='unix')
 
         # assume the end time of midnight means end time info was not
@@ -609,7 +609,7 @@ headerList = df_source.columns.values.tolist()
 instData = []
 instDataNames = []
 
-# **** Look at the data type being input (-t, -a, or -n) and make sure there
+# **** Look at the data type being input (-t, -a, -n or -s) and make sure there
 # is at least the minimum number of columns for a valid data file. If there are
 # any merge files specified (-am params), then merge them. Finally process the
 # data into a list of TsIdxData objects, with one object per instrument holding
@@ -653,7 +653,17 @@ then only one value will be retained.\nThe following column names are duplicated
     # Define a function to merge specified files. Put the internal definition
     # here, as if only pertains to this file type, and so it can be seen
     # before use
-    def aMerge(fileToMerge, sep, encoding, df_src):
+    def _tMerge(fileToMerge, df_base, sep, encoding):
+        """
+        This function merges data from the specified file name (fileToMerge)
+        with the base data (df_base), and returns the merged data.
+        The data to merge is read from a csv file, and must also be in the
+        Historical Trend data format (-t).
+
+        Since this file format has independent time/value pairs
+        in columns going to the right, this merge simply makes the source data wider
+        by appending columns (pd.concat with axis=1).
+        """
         try:
             print('Merging file "' + fileToMerge + '".\n')
             # use string as the data type for all columns to prevent automatic
@@ -700,7 +710,7 @@ The following tags column names are duplicated:')
 
         # Deal with duplicates between the source and merge file.
         # Detect duplicates and warn.
-        dups = listToListIntersection(df_src, df_merge)
+        dups = listToListIntersection(df_base, df_merge)
         if dups:
             # duplicates have been found.  Notify and continue.
             print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
@@ -713,50 +723,42 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append columns (axis = 1), keeping the header rows.
         # There may be NaN values present when/if columns are diffenrent length.
         # This isn't different than in the input file.
-        df_merged = pd.concat([df_src, df_merge], axis=1, join='outer', sort=False)
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
+        df_base = pd.concat([df_base, df_merge], axis=1, join='outer', sort=False)
+        # Drop the merge data as a matter of cleanup after it is maybe printed,
+        # and then return the merged data
 
         # print diagnostic info if verbose is set
         if args.verbose:
             print('**** Merge Data ****')
             print(df_merge)
             print('**** Merged Data ****')
-            print(df_merged)
+            print(df_base)
 
-        ## replace the old data with the merged data
-        #df_src = []
-        #df_src[:] = list(df_merged)
-        #print('***')
-        #print(df_src)
-        ##del df_merge
-        ##del df_merged
-        return df_merged
+        del df_merge
+        return df_base
+        # end _tMerge()
 
     # If there are files specified to merge, merge them with the input file before
-    # further processing. Since this file format has independent time/value pairs
-    # in columns going to the right, this merge simply makes the source data wider
-    # by appending columns (pd.concat with axis=1).
+    # further processing.
     # Merge File 1
     if args.archiveMerge1 is not None:
-        df_source = aMerge(args.archiveMerge1, sep=args.sourceDelimiter,
-                            encoding=args.sourceEncoding, df_src=df_source)
+        df_source = _tMerge(args.archiveMerge1, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 2
     if args.archiveMerge2 is not None:
-        df_source = aMerge(args.archiveMerge2, sep=args.sourceDelimiter,
-                            encoding=args.sourceEncoding, df_src=df_source)
+        df_source = _tMerge(args.archiveMerge2, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 3
     if args.archiveMerge3 is not None:
-        df_source = aMerge(args.archiveMerge3, sep=args.sourceDelimiter,
-                            encoding=args.sourceEncoding, df_src=df_source)
+        df_source = _tMerge(args.archiveMerge3, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 4
     if args.archiveMerge4 is not None:
-        df_source = aMerge(args.archiveMerge4, sep=args.sourceDelimiter,
-                            encoding=args.sourceEncoding, df_src=df_source)
+        df_source = _tMerge(args.archiveMerge4, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # update the header list after the merge to make sure new tags are reflected.
     headerList = df_source.columns.values.tolist()
@@ -771,7 +773,7 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # Even indexes are timestamps, odd indexes are values.
         # Get the inst name, leaving off the bit after the last space, which is
         # normally 'Time' or 'ValueY'. If there is no space found, use the entire
-        # string as the instrument name.
+        # string as the instrument'a name.
         # rpartition separates a string at the last separator,
         # working from the right. Given a separator, rpartition returns a tuple:
         #   The part before the separator, the separator, and the part after
@@ -863,14 +865,22 @@ There will be no further processing.\nThe following column names are duplicated:
         print(dups)
         quit()
 
-    # If there are files specified to merge, merge them with the input file before
-    # further processing. Since the file format has rows being unique on
-    # TagId and Timestamp combo, this merge simply makes the source data longer
-    # by appending rows (pd.concat with axis=0).
-    # Merge File 1
-    if args.archiveMerge1 is not None:
+    # Define a function to merge specified files. Put the internal definition
+    # here, as if only pertains to this file type, and so it can be seen and
+    # understood before use.
+    def _aMerge(fileToMerge, df_base, sep, encoding):
+        """
+        This function merges data from the specified file name (fileToMerge)
+        with the base data (df_base), and returns the merged data.
+        The data to merge is read from a csv file, and must also be in the
+        archive data format (-a).
+
+        Since the file format has rows being unique on
+        TagId and Timestamp combo, this merge simply makes the source data longer
+        by appending rows (pd.concat with axis=0).
+        """
         try:
-            print('Merging file "' + args.archiveMerge1 + '".\n')
+            print('Merging file "' + fileToMerge + '".\n')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
@@ -888,15 +898,15 @@ There will be no further processing.\nThe following column names are duplicated:
             # mangle_dupe_cols=False, and use header=None instead of header=0 in the
             # read_csv function.  Then manually rename the columns using the 1st row
             # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
+            df_merge = pd.read_csv(fileToMerge, sep=sep,
+                                delim_whitespace=False, encoding=encoding,
                                 header=None, dtype = str, skipinitialspace=True)
                                 # mangle_dupe_cols=False)
             df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
 
         except ValueError as ve:
             print('    ERROR opening the file specified with the -am1/archiveMerge1 \
-parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
+parameter: "' + fileToMerge + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
@@ -908,7 +918,7 @@ Unexpected encoding can also cause this error.')
         dups = listDuplicates(df_merge)
         if dups:
             # duplicates have been found.  Notify leave.
-            print('    ERROR: There are column names duplicated in the file "' + args.archiveMerge1 + '" specified \
+            print('    ERROR: There are column names duplicated in the file "' + fileToMerge + '" specified \
 with the -am1/archiveMerge1 parameter.\nThis is not allowed with this type of data because it does not make sense.\n\
 There will be no further processing.\nThe following column names are duplicated:')
             print(dups)
@@ -919,232 +929,44 @@ There will be no further processing.\nThe following column names are duplicated:
 
         # Now merge the data. Append rows (axis = 0), ignoring overlapping
         # index (row numbers)
-        df_merged = pd.concat([df_source, df_merge], axis=0,
+        df_base = pd.concat([df_base, df_merge], axis=0,
                               ignore_index=True, join='outer', sort=False)
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
+        # Drop the merge data as a matter of cleanup after it is maybe printed,
+        # and then return the merged data
 
         # print diagnostic info if verbose is set
         if args.verbose:
             print('**** Merge Data ****')
             print(df_merge)
             print('**** Merged Data ****')
-            print(df_merged)
+            print(df_base)
 
-        del df_source
         del df_merge
-        df_source = df_merged
-        del df_merged
+        return df_base
+        # end _aMerge()
+
+    # If there are files specified to merge, merge them with the input file before
+    # further processing.
+    # Merge File 1
+    if args.archiveMerge1 is not None:
+        df_source = _aMerge(args.archiveMerge1, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 2
     if args.archiveMerge2 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge2 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am2/archiveMerge2 \
-parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
-Unexpected encoding can also cause this error.')
-            print(ve)
-            quit()
-
-        # Deal with duplicates in the merge file.
-        # Duplicates with this data format within the same file are problematic
-        # because they don't make sense, and are an indicator of invalid source
-        # data. Message out and punt.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates have been found.  Notify leave.
-            print('    ERROR: There are column names duplicated in the file "' + args.archiveMerge2 + '" specified \
-with the -am2/archiveMerge2 parameter.\nThis is not allowed with this type of data because it does not make sense.\n\
-There will be no further processing.\nThe following column names are duplicated:')
-            print(dups)
-            quit()
-
-        # Deal with duplicates between the source and merge file.
-        # This is expected (necessary) with this data type. Nothing to do.
-
-        # Now merge the data. Append rows (axis = 0), ignoring overlapping
-        # index (row numbers)
-        df_merged = pd.concat([df_source, df_merge], axis=0, \
-                              ignore_index=True, join='outer', sort=False)
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
+        df_source = _aMerge(args.archiveMerge2, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 3
     if args.archiveMerge3 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge3 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am3/archiveMerge3 \
-parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions. \
-Unexpected encoding can also cause this error.')
-            quit()
-
-        # Deal with duplicates in the merge file.
-        # Duplicates with this data format within the same file are problematic
-        # because they don't make sense, and are an indicator of invalid source
-        # data. Message out and punt.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates have been found.  Notify leave.
-            print('    ERROR: There are column names duplicated in the file "' + args.archiveMerge3 + '" specified \
-with the -am3/archiveMerge3 parameter.\nThis is not allowed with this type of data because it does not make sense.\n\
-There will be no further processing.\nThe following column names are duplicated:')
-            print(dups)
-            quit()
-
-        # Deal with duplicates between the source and merge file.
-        # This is expected (necessary) with this data type. Nothing to do.
-
-        # Now merge the data. Append rows (axis = 0), ignoring overlapping
-        # index (row numbers)
-        df_merged = pd.concat([df_source, df_merge], axis=0, \
-                              ignore_index=True, join='outer', sort=False)
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
+        df_source = _aMerge(args.archiveMerge3, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 4
     if args.archiveMerge4 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge4 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
+        df_source = _aMerge(args.archiveMerge4, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am4/archiveMerge4 \
-parameter: "' + args.archiveMerge4 + '".\n Check file name, file presence, and permissions.  \
-Unexpected encoding can also cause this error.')
-            print(ve)
-            quit()
-
-        # Deal with duplicates in the merge file.
-        # Duplicates with this data format within the same file are problematic
-        # because they don't make sense, and are an indicator of invalid source
-        # data. Message out and punt.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates have been found.  Notify leave.
-            print('    ERROR: There are column names duplicated in the file "' + args.archiveMerge4 + '" specified \
-with the -am4/archiveMerge4 parameter.\nThis is not allowed with this type of data because it does not make sense.\n\
-There will be no further processing.\nThe following column names are duplicated:')
-            print(dups)
-            quit()
-
-        # Deal with duplicates between the source and merge file.
-        # This is expected (necessary) with this data type. Nothing to do.
-
-        # Now merge the data. Append rows (axis = 0), ignoring overlapping
-        # index (row numbers)
-        df_merged = pd.concat([df_source, df_merge], axis=0, \
-                              ignore_index=True, join='outer', sort=False)
-        # drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
 
     # From the source data, create a data frame with just the
     # tag id, tag name, time stamp, value
@@ -1163,7 +985,6 @@ There will be no further processing.\nThe following column names are duplicated:
     try:
         df_valData[headerList[2]] = pd.to_datetime(df_valData[headerList[2]],
                                                    errors='raise',
-                                                   box = True,
                                                    format=sourceTimeFormat,
                                                    exact=False,
                                                    #infer_datetime_format = True,
@@ -1174,7 +995,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         print(ve)
         df_valData[headerList[2]] = pd.to_datetime(df_valData[headerList[2]],
                                                    errors='coerce',
-                                                   box = True,
                                                    infer_datetime_format = True,
                                                    origin = 'unix')
 
@@ -1341,7 +1161,6 @@ There will be no further processing.\nThe following column names are duplicated:
         try:
             df_source[tsName] = pd.to_datetime(df_source[tsName],
                                             errors='raise',
-                                            box = True,
                                             format=sourceTimeFormat,
                                             exact=False,
                                             #infer_datetime_format = True,
@@ -1352,7 +1171,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
             print(ve)
             df_source[tsName] = pd.to_datetime(df_source[tsName],
                                             errors='coerce',
-                                            box = True,
                                             infer_datetime_format = True,
                                             origin = 'unix')
     # Remove any NaN/NaT values as a result of conversion
@@ -1374,15 +1192,23 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
     # sort the index for possible better performance later
     df_source.sort_index(inplace=True)
 
-    # If there are files specified to merge, merge them with the input file before
-    # further processing. This file has times and tags that may match or
-    # may be additional to the source data. The data merge will make the source
-    # data wider if there are new tags, and longer if there are new times. One or
-    # both may happen.
-    # Merge File 1
-    if args.archiveMerge1 is not None:
+    # Define a function to merge specified files. Put the internal definition
+    # here, as if only pertains to this file type, and so it can be seen and
+    # understood before use.
+    def _nMerge(fileToMerge, df_base, sep, encoding):
+        """
+        This function merges data from the specified file name (fileToMerge)
+        with the base data (df_base), and returns the merged data.
+        The data to merge is read from a csv file, and must also be in the
+        time normalized data format (-n).
+
+        The file to merge has times and tags that may match or may be additional
+        to the source data. The data merge will make the source data wider if
+        there are new tags, and longer if there are new times. One or both may
+        happen.
+        """
         try:
-            print('Merging file "' + args.archiveMerge1 + '".\n')
+            print('Merging file "' + fileToMerge + '".\n')
             # use string as the data type for all columns to prevent automatic
             # datatype detection. We don't know ahead of time how many columns are
             # being read in, so we don't yet know the types.
@@ -1400,15 +1226,15 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
             # mangle_dupe_cols=False, and use header=None instead of header=0 in the
             # read_csv function.  Then manually rename the columns using the 1st row
             # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge1, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
+            df_merge = pd.read_csv(fileToMerge, sep=sep,
+                                delim_whitespace=False, encoding=encoding,
                                 header=None, dtype = str, skipinitialspace=True)
                                 # mangle_dupe_cols=False)
             df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
 
         except ValueError as ve:
-            print('ERROR opening the file specified with the -am1/archiveMerge1 \
-parameter: "' + args.archiveMerge1 + '".\n Check file name, file presence, and permissions.  \
+            print('ERROR opening the file specified with the -amx/archiveMergex \
+parameter: "' + fileToMerge + '".\n Check file name, file presence, and permissions.  \
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
@@ -1424,8 +1250,8 @@ Unexpected encoding can also cause this error.')
         dups = listDuplicates(df_merge)
         if dups:
             # duplicates have been found.  Notify leave.
-            print('    ERROR: There are column names duplicated in the file "' + args.archiveMerge1 + '" specified \
-with the -am1/archiveMerge1 parameter.\nThis is not allowed with this type of data because it usually \
+            print('    ERROR: There are column names duplicated in the file "' + fileToMerge + '" specified \
+with the -amx/archiveMergex parameter.\nThis is not allowed with this type of data because it usually \
 means tag values would be ambiguous at a given time.\n\
 There will be no further processing.\nThe following column names are duplicated:')
             print(dups)
@@ -1449,18 +1275,16 @@ There will be no further processing.\nThe following column names are duplicated:
             try:
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='raise',
-                                                box = True,
                                                 format=sourceTimeFormat,
                                                 exact=False,
                                                 #infer_datetime_format = True,
                                                 origin = 'unix')
             except ValueError as ve:
                 print('    WARNING: Problem converting some timestamps from \
-    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
+    the data to merge.  Timestamps may be incorrect, and/or some rows may be missing.')
                 print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
-                                                box = True,
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
@@ -1488,11 +1312,11 @@ There will be no further processing.\nThe following column names are duplicated:
         # With this data format, this may or may not be problematic. If there
         # are duplicated timestamps, they will get removed after merging.
         # Detect duplicates and warn.
-        dups = listToListIntersection(df_source.columns.values, df_merge.columns.values)
+        dups = listToListIntersection(df_base.columns.values, df_merge.columns.values)
         if dups:
             # duplicates have been found.  Notify and continue.
             print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
-in the file "' + args.archiveMerge1 + '" specified with the -am1/archiveMerge1 parameter.\nThis is allowed, \
+in the file "' + fileToMerge + '" specified with the -amx/archiveMergex parameter.\nThis is allowed, \
 but if the duplicate column or columns contain duplicate timestamps, then only \n\
 one value will be retained.\nThe following tags are duplicated:')
             print(dups)
@@ -1501,437 +1325,42 @@ one value will be retained.\nThe following tags are duplicated:')
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
+        df_base = pd.concat([df_base, df_merge], axis=0, sort=False)
+        # Drop the merge data as a matter of cleanup after it is maybe printed,
+        # and then return the merged data
 
         # print diagnostic info if verbose is set
         if args.verbose:
             print('**** Merge Data ****')
             print(df_merge)
             print('**** Merged Data ****')
-            print(df_merged)
+            print(df_base)
 
-        # Drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-        del df_source
         del df_merge
-        df_source = df_merged
-        del df_merged
+        return df_base
+        # end _nMerge()
+
+    # If there are files specified to merge, merge them with the input file before
+    # further processing.
+    # Merge File 1
+    if args.archiveMerge1 is not None:
+        df_source = _nMerge(args.archiveMerge1, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 2
     if args.archiveMerge2 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge2 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge2, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am2/archiveMerge2\
-parameter: "' + args.archiveMerge2 + '".\n Check file name, file presence, and permissions.  \
-Unexpected encoding can also cause this error.')
-            print(ve)
-            quit()
-        # Drop the time bias (second) column
-        df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
-
-        # Deal with duplicates in the merge file.
-        # Duplicates with this data format within the same file are problematic
-        # because they represent a tag with more than one value at the same timestamp.
-        # While this could be delt with when merging, it is an indication that the
-        # data may not be as expected. Error out so a person needs to take a look.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates have been found.  Notify leave.
-            print('    ERROR: There are column names duplicated in the file "' + args.archiveMerge2 + '" specified \
-with the -am2/archiveMerge2 parameter.\nThis is not allowed with this type of data because it usually \
-means tag values would be ambiguous at a given time.\n\
-There will be no further processing.\nThe following column names are duplicated:')
-            print(dups)
-            quit()
-
-        # Deal with duplicates between the source and merge file.
-        # Delay this until further below, once the merge data has been indexed by
-        # timestamp. In other words, compare the columns for dups, not the timestamp
-        # column name.
-
-        # Index the merge data time stamp column. Since we know this will be the
-        # index in this case, do this early so we can take advantage of it later.
-        # First make sure the timesamp can be converted to a datetime.
-        tsName = df_merge.columns[0]
-        if 'datetime64[ns]' != df_merge[tsName].dtype:
-            # For changing to timestamps, coerce option for errors is marking
-            # dates after midnight (next day) as NaT.
-            # Not sure why. Try it with raise, first, and you get
-            # all the values. Put it in a try block, just in case an error is
-            # raised.
-            try:
-                df_merge[tsName] = pd.to_datetime(df_merge[tsName],
-                                                errors='raise',
-                                                box = True,
-                                                format=sourceTimeFormat,
-                                                exact=False,
-                                                #infer_datetime_format = True,
-                                                origin = 'unix')
-            except ValueError as ve:
-                print('    WARNING: Problem converting some timestamps from \
-    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
-                print(ve)
-                df_merge[tsName] = pd.to_datetime(df_merge[tsName],
-                                                errors='coerce',
-                                                box = True,
-                                                infer_datetime_format = True,
-                                                origin = 'unix')
-        # Remove any NaN/NaT values as a result of conversion
-        df_merge.dropna(subset=[tsName], how='any', inplace=True)
-        # Rround the timestamp to the nearest ms. Unseen ns and
-        # fractional ms values are not always displayed, and can cause
-        # unexpected merge and up/downsample results.
-        try:
-            df_merge[tsName] = df_merge[tsName].dt.round('L')
-        except ValueError as ve:
-            print('    WARNING: Timestamp cannot be rounded.')
-            print(ve)
-
-        # Get rid of any duplicate timestamps. Done after rounding in case rounding
-        # introduced dups.
-        df_merge.drop_duplicates(subset=[tsName], keep='last', inplace=True)
-        # set the timestamp column to be the index
-        df_merge.set_index(tsName, inplace=True)
-        # sort the index for possible better performance later
-        df_merge.sort_index(inplace=True)
-
-        # Now that the source and merge data have both been indexed by timestamp,
-        # we can deal with duplicate value column names between the source and
-        # merge file.
-        # With this data format, this may or may not be problematic. If there
-        # are duplicated timestamps, they will get removed after merging.
-        # Detect duplicates and warn.
-        dups = listToListIntersection(df_source.columns.values, df_merge.columns.values)
-        if dups:
-            # duplicates have been found.  Notify and continue.
-            print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
-in the file "' + args.archiveMerge2 + '" specified with the -am2/archiveMerge2 parameter.\nThis is allowed, \
-but if the duplicate column or columns contain duplicate timestamps, then only \n\
-one value will be retained.\nThe following tags are duplicated:')
-            print(dups)
-            print()
-
-        # Now merge the data. Append rows (axis=0), which actually is appending
-        # to the index. Note that NaN values may result depending on which times
-        # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        # Drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
+        df_source = _nMerge(args.archiveMerge2, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 3
     if args.archiveMerge3 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge3 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each 
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for 
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use 
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge3, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am3/archiveMerge3 \
-parameter: "' + args.archiveMerge3 + '".\n Check file name, file presence, and permissions.  \
-Unexpected encoding can also cause this error.')
-            print(ve)
-            quit()
-        # Drop the time bias (second) column
-        df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
-
-        # Deal with duplicates in the merge file.
-        # Duplicates with this data format within the same file are problematic
-        # because they represent a tag with more than one value at the same timestamp.
-        # While this could be delt with when merging, it is an indication that the
-        # data may not be as expected. Error out so a person needs to take a look.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates have been found.  Notify leave.
-            print('    ERROR: There are column names duplicated in the file "' + args.archiveMerge3 + '" specified \
-with the -am3/archiveMerge3 parameter.\nThis is not allowed with this type of data because it usually \
-means tag values would be ambiguous at a given time.\n\
-There will be no further processing.\nThe following column names are duplicated:')
-            print(dups)
-            quit()
-
-        # Deal with duplicates between the source and merge file.
-        # Delay this until further below, once the merge data has been indexed by
-        # timestamp. In other words, compare the columns for dups, not the timestamp
-        # column name.
-
-        # Index the merge data time stamp column. Since we know this will be the
-        # index in this case, do this early so we can take advantage of it later.
-        # First make sure the timesamp can be converted to a datetime.
-        tsName = df_merge.columns[0]
-        if 'datetime64[ns]' != df_merge[tsName].dtype:
-            # For changing to timestamps, coerce option for errors is marking
-            # dates after midnight (next day) as NaT.
-            # Not sure why. Try it with raise, first, and you get
-            # all the values. Put it in a try block, just in case an error is
-            # raised.
-            try:
-                df_merge[tsName] = pd.to_datetime(df_merge[tsName],
-                                                errors='raise',
-                                                box = True,
-                                                format=sourceTimeFormat,
-                                                exact=False,
-                                                #infer_datetime_format = True,
-                                                origin = 'unix')
-            except ValueError as ve:
-                print('    WARNING: Problem converting some timestamps from \
-    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
-                print(ve)
-                df_merge[tsName] = pd.to_datetime(df_merge[tsName],
-                                                errors='coerce',
-                                                box = True,
-                                                infer_datetime_format = True,
-                                                origin = 'unix')
-        # Remove any NaN/NaT values as a result of conversion
-        df_merge.dropna(subset=[tsName], how='any', inplace=True)
-        # Rround the timestamp to the nearest ms. Unseen ns and
-        # fractional ms values are not always displayed, and can cause
-        # unexpected merge and up/downsample results.
-        try:
-            df_merge[tsName] = df_merge[tsName].dt.round('L')
-        except ValueError as ve:
-            print('    WARNING: Timestamp cannot be rounded.')
-            print(ve)
-
-        # Get rid of any duplicate timestamps. Done after rounding in case rounding
-        # introduced dups.
-        df_merge.drop_duplicates(subset=[tsName], keep='last', inplace=True)
-        # set the timestamp column to be the index
-        df_merge.set_index(tsName, inplace=True)
-        # sort the index for possible better performance later
-        df_merge.sort_index(inplace=True)
-
-        # Now that the source and merge data have both been indexed by timestamp,
-        # we can deal with duplicate value column names between the source and
-        # merge file.
-        # With this data format, this may or may not be problematic. If there
-        # are duplicated timestamps, they will get removed after merging.
-        # Detect duplicates and warn.
-        dups = listToListIntersection(df_source.columns.values, df_merge.columns.values)
-        if dups:
-            # duplicates have been found.  Notify and continue.
-            print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
-in the file "' + args.archiveMerge3 + '" specified with the -am3/archiveMerge3 parameter.\nThis is allowed, \
-but if the duplicate column or columns contain duplicate timestamps, then only \n\
-one value will be retained.\nThe following tags are duplicated:')
-            print(dups)
-            print()
-
-        # Now merge the data. Append rows (axis=0), which actually is appending
-        # to the index. Note that NaN values may result depending on which times
-        # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        # Drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
-
+        df_source = _nMerge(args.archiveMerge3, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # Merge File 4
     if args.archiveMerge4 is not None:
-        try:
-            print('Merging file "' + args.archiveMerge4 + '".\n')
-            # use string as the data type for all columns to prevent automatic
-            # datatype detection. We don't know ahead of time how many columns are
-            # being read in, so we don't yet know the types.
-            # We want duplicate column names to be preserved as in.
-            # They will get filtered out as duplicates later.
-            # The default behavior of read_csv is to append a ".n" to the column name
-            # where n is an integer value starting at 1 and incrementing up for each
-            # duplicate found. The problem with this is later, this gets interpreted as
-            # a different tag if using some options.
-            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
-            # column names by turning off the mangling described above.
-            # It is "not supported yet" but is in the documentation for
-            # Pandas 0.22 and maybe earler as being a feature!!
-            # It throws a ValueError if used.  As a work around, don't use
-            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function.  Then manually rename the columns using the 1st row
-            # of the csv.
-            df_merge = pd.read_csv(args.archiveMerge4, sep=args.sourceDelimiter,
-                                delim_whitespace=False, encoding=args.sourceEncoding,
-                                header=None, dtype = str, skipinitialspace=True)
-                                # mangle_dupe_cols=False)
-            df_merge = df_merge.rename(columns=df_merge.iloc[0], copy=False).iloc[1:].reset_index(drop=True)
-
-        except ValueError as ve:
-            print('ERROR opening the file specified with the -am4/archiveMerge4 \
-parameter: "' + args.archiveMerge4+ '".\n Check file name, file presence, and permissions.  \
-Unexpected encoding can also cause this error.')
-            print(ve)
-            quit()
-        # Drop the time bias (second) column
-        df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
-
-        # Deal with duplicates in the merge file.
-        # Duplicates with this data format within the same file are problematic
-        # because they represent a tag with more than one value at the same timestamp.
-        # While this could be delt with when merging, it is an indication that the
-        # data may not be as expected. Error out so a person needs to take a look.
-        dups = listDuplicates(df_merge)
-        if dups:
-            # duplicates have been found.  Notify leave.
-            print('    ERROR: There are column names duplicated in the file "' + args.archiveMerge4 + '" specified \
-with the -am4/archiveMerge4 parameter.\nThis is not allowed with this type of data because it usually \
-means tag values would be ambiguous at a given time.\n \
-There will be no further processing.\nThe following column names are duplicated:')
-            print(dups)
-            quit()
-
-        # Deal with duplicates between the source and merge file.
-        # Delay this until further below, once the merge data has been indexed by
-        # timestamp. In other words, compare the columns for dups, not the timestamp
-        # column name.
-
-        # Index the merge data time stamp column. Since we know this will be the
-        # index in this case, do this early so we can take advantage of it later.
-        # First make sure the timesamp can be converted to a datetime.
-        tsName = df_merge.columns[0]
-        if 'datetime64[ns]' != df_merge[tsName].dtype:
-            # For changing to timestamps, coerce option for errors is marking
-            # dates after midnight (next day) as NaT.
-            # Not sure why. Try it with raise, first, and you get
-            # all the values. Put it in a try block, just in case an error is
-            # raised.
-            try:
-                df_merge[tsName] = pd.to_datetime(df_merge[tsName],
-                                                errors='raise',
-                                                box = True,
-                                                format=sourceTimeFormat,
-                                                exact=False,
-                                                #infer_datetime_format = True,
-                                                origin = 'unix')
-            except ValueError as ve:
-                print('    WARNING: Problem converting some timestamps from \
-    the source data.  Timestamps may be incorrect, and/or some rows may be missing.')
-                print(ve)
-                df_merge[tsName] = pd.to_datetime(df_merge[tsName],
-                                                errors='coerce',
-                                                box = True,
-                                                infer_datetime_format = True,
-                                                origin = 'unix')
-        # Remove any NaN/NaT values as a result of conversion
-        df_merge.dropna(subset=[tsName], how='any', inplace=True)
-        # Rround the timestamp to the nearest ms. Unseen ns and
-        # fractional ms values are not always displayed, and can cause
-        # unexpected merge and up/downsample results.
-        try:
-            df_merge[tsName] = df_merge[tsName].dt.round('L')
-        except ValueError as ve:
-            print('    WARNING: Timestamp cannot be rounded.')
-            print(ve)
-
-        # Get rid of any duplicate timestamps. Done after rounding in case rounding
-        # introduced dups.
-        df_merge.drop_duplicates(subset=[tsName], keep='last', inplace=True)
-        # set the timestamp column to be the index
-        df_merge.set_index(tsName, inplace=True)
-        # sort the index for possible better performance later
-        df_merge.sort_index(inplace=True)
-
-        # Now that the source and merge data have both been indexed by timestamp,
-        # we can deal with duplicate value column names between the source and
-        # merge file.
-        # With this data format, this may or may not be problematic. If there
-        # are duplicated timestamps, they will get removed after merging.
-        # Detect duplicates and warn.
-        dups = listToListIntersection(df_source.columns.values, df_merge.columns.values)
-        if dups:
-            # duplicates have been found.  Notify and continue.
-            print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
-in the file "' + args.archiveMerge4 + '" specified with the -am4/archiveMerge4 parameter.\nThis is allowed, \
-but if the duplicate column or columns contain duplicate timestamps, then only \n\
-one value will be retained.\nThe following tags are duplicated:')
-            print(dups)
-            print()
-
-        # Now merge the data. Append rows (axis=0), which actually is appending
-        # to the index. Note that NaN values may result depending on which times
-        # and values are being merged, but these will get removed later.
-        df_merged = pd.concat([df_source, df_merge], axis=0, sort=False)
-
-        # print diagnostic info if verbose is set
-        if args.verbose:
-            print('**** Merge Data ****')
-            print(df_merge)
-            print('**** Merged Data ****')
-            print(df_merged)
-
-        # Drop the source and make the merged data the new source, then drop the merged data
-        # This is so follow on code always has a valid df_source to work with, just as if
-        # no files were merged.
-        del df_source
-        del df_merge
-        df_source = df_merged
-        del df_merged
+        df_source = _nMerge(args.archiveMerge4, df_base=df_source,
+                sep=args.sourceDelimiter, encoding=args.sourceEncoding)
 
     # At this point, the source data has this structure
     # idx TimeStamp
@@ -2024,164 +1453,278 @@ elif args.s and len(headerList) >= 3:
     # ...
     # [n+1] Tag n Value
     #
-    # TODO (maybe): Dynamically determie first column whcih contains "ID"
-    #       and "...Elapsed"  Use these column numbers to "anchor" the parsing.
-    #
-    # Interate thru columns and find the "ID" marker (exact match).
-    # This is important becuase it marks the row where it and above is the
-    # header information and below which is the data.
-    # df.shape returns a (row count, column count) tuple
-    markLabel = 'ID'
-    idCol = -1  # keep track of where mark is found
-    idRow = -1
-    for colNum in range(df_source.shape[1]):     # 0 to max columns
-        # look for the mark (exact match)
-        markRows = df_source[colNum].eq(markLabel)
-        if markRows.any():
-            # The mark was found
-            # Keep the row and column, and exit the loop (assume only one 'ID' marker
-            idCol = colNum
-            idRow = markRows.idxmax()
-            break
-    # if we get here, and id col/row are < 0, the id mark was not found. Punt
-    if idCol < 0 or idRow < 0:
-        print('ERROR: Data may be invalid.  Looking for a cell with an exact \
-match to "' + markLabel + '". It is used to delimit the header from the data \
-and to delimit the leftmost column. Unable to process strain data.')
-        quit()
+    # Internal function to process the header and return a time indexed data frame
+    # with first row headers.
+    def _procHeader(df_raw, anchorLabel = 'ID', startTimeLabel = 'Start Time:',
+                    tagNamesLabel = 'Assignment:', unitsLabel = 'Reduction Method:',
+                    strainUnitPrefix = 'u', elapsedTimeLabel = 'Elapsed'):
+        """
+        Given a data frame (df_raw), and a number of delimiters, this function will
+        parse up the header to determine start time, tag names, and units. The funciton
+        will return a timestamp indexed data frame with first row headers. The
+        header names fit the pattern 'Tag Name (units)'.
 
-    # Before we deal with the data, we need some important things from
-    # the header: the start time, the tag names (Assignment), and the
-    # the units (Reduction Method).
-    # Note: Use the id column and row determined above for positioning.
-    # Assume the header is this row and above, and the meaningful data
-    # is from this column and to the right.
-    #
-    # Get the start time.
-    # Look for the label in the left column. If it exists, the resulting series
-    # will have a True value in the position corresponding to the row.
-    # If found, break out the non-label part and trim off leading/trailing space.
-    markLabel = 'Start Time:'
-    markRows = df_source[idCol].str.match(markLabel, case=False, na=False)
-    if markRows.any():
-        # The label was found -- the row will be marked as true, which is considered
-        # greater than false, so it will be the index with the max value.
-        # Get the contents, which will include the label.
-        # Split out the label, trim the other part, and save it
-        # as a pandas timestamp
-        startTime = df_source[idCol][markRows.idxmax()].split(":", 1)
-        try:
-            startTime = pd.Timestamp(startTime[1].strip())
-        except ValueError as ve:
-            print('ERROR: Problem converting Start Time to a timestamp. \
+        The row and column location of the anchor label is used (default is "ID")
+        to locate raw data. This is done in case there are rows above, or
+        columns to the left of what would be a typical data frame.
+        """
+        # Interate thru columns and find the anchor label marker (exact match).
+        # This is important because it marks the row where it and above is the
+        # header information and below which is the data.
+        # df.shape returns a (row count, column count) tuple
+        markLabel = anchorLabel
+        idCol = -1  # keep track of where mark is found
+        idRow = -1
+        for colNum in range(df_raw.shape[1]):     # 0 to max columns
+            # look for the mark (exact match)
+            markRows = df_raw[colNum].eq(markLabel)
+            if markRows.any():
+                # The mark was found
+                # Keep the row and column, and exit the loop (assume only one 'ID' marker
+                idCol = colNum
+                idRow = markRows.idxmax()
+                break
+        # if we get here, and id col/row are < 0, the id mark was not found. Punt
+        if idCol < 0 or idRow < 0:
+            print('ERROR: Data may be invalid.  Looking for a cell with an exact \
+    match to "' + markLabel + '". It is used to delimit the header from the data \
+    and to delimit the leftmost column. Unable to process strain data.')
+            quit()
+
+        # Before we deal with the data, we need some important things from
+        # the header: the start time, the tag names (Assignment), and the
+        # the units (Reduction Method).
+        # Note: Use the id column and row determined above for positioning.
+        # Assume the header is this row and above, and the meaningful data
+        # is from this column and to the right.
+        #
+        # Get the start time.
+        # Look for the label in the left column. If it exists, the resulting series
+        # will have a True value in the position corresponding to the row.
+        # If found, break out the non-label part and trim off leading/trailing space.
+        markLabel = startTimeLabel
+        markRows = df_raw[idCol].str.match(markLabel, case=False, na=False)
+        if markRows.any():
+            # The label was found -- the row will be marked as true, which is considered
+            # greater than false, so it will be the index with the max value.
+            # Get the contents, which will include the label.
+            # Split out the label, trim the other part, and save it
+            # as a pandas timestamp
+            startTime = df_raw[idCol][markRows.idxmax()].split(":", 1)
+            try:
+                startTime = pd.Timestamp(startTime[1].strip())
+            except ValueError as ve:
+                print('ERROR: Problem converting Start Time to a timestamp. \
 Unable to process strain data.')
+                print(ve)
+                quit()
+        else:
+            # no start time found.  Gartz to go...
+            print('\nERROR: Data may be invalid.  Looking for a cell which \
+contains: "' + markLabel + '" in the same column as the anchor label (usually "ID"). \
+This cell should contain the data start time. Unable to process strain data.')
+            quit()
+
+        # Get the tag names (assignments)
+        # Look for the label in the left column. If it exists, the resulting series
+        # will have a True value in the position corresponding to the row.
+        # If found, get the row, removing the first two columns.
+        markLabel = tagNamesLabel
+        markRows = df_raw[idCol].str.match(markLabel, case=False, na=False)
+        if markRows.any():
+            # The label was found -- the row will be marked as true, which is considered
+            # greater than false, so it will be the index with the max value.
+            # Get the data frame row for this location, stripping off the first
+            # two columns which contain the label and a blank location corresponding
+            # to the elapsed time column.
+            tagNames = df_raw.iloc[markRows.idxmax()][idCol + 2:]
+        else:
+            # Tag name label not found.  Gartz to go...
+            print('\nERROR: No Tag Name label "' + markLabel + '" row found. Unable to process strain data.')
+            quit()
+
+        # Get the units (Reduction Method)
+        # Look for the label in the left column. If it exists, the resulting series
+        # will have a True value in the position corresponding to the row.
+        # If found, get the row, removing the first two columns.
+        markLabel = unitsLabel
+        markRows= df_raw[idCol].str.match(markLabel, case=False, na=False)
+        if markRows.any():
+            # The label was found -- the row will be marked as true, which is considered
+            # greater than false, so it will be the index with the max value.
+            # Get the data frame row for this location, stripping off the first
+            # two columns which contain the label and a blank location corresponding
+            # to the elapsed time column.
+            units= df_raw.iloc[markRows.idxmax()][idCol + 2:]
+            # Combine the tag from above, with the units so we don't need two rows
+            # to display both -- TagName (units)
+            # Tag name and units should be the same length, but just in case use min len
+            for colNum in range(min(tagNames.size, units.size)):
+                if units.iloc[colNum] and units.iloc[colNum].lower() != 'strain':
+                    # there is a unit specified, and it isn't strain. Concat with tag name
+                    tagNames.iloc[colNum] = tagNames.iloc[colNum] + ' (' + units.iloc[colNum] + ')'
+                elif units.iloc[colNum] and units.iloc[colNum].lower() == 'strain':
+                    # there is a unit specified, but it is strain.
+                    # Concat 'uStrain' with tag name (add the u).
+                    tagNames.iloc[colNum] = tagNames.iloc[colNum] + ' (' + strainUnitPrefix + 'Strain)'
+        else:
+            # Units label not found.  Gartz to go...
+            print('\nERROR: No Units label "' + markLabel + '" row found. Unable to process strain data.')
+            quit()
+
+        # Get elapsed times (time offsets)
+        # Look for the label in the second column. If it exists, the resulting series
+        # will have a True value in the position corresponding to the row.
+        markLabel = elapsedTimeLabel
+        # note use of contains since the mark is not at the beginning
+        markRows = df_raw[idCol + 1].str.contains(markLabel, case=False, na=False)
+        if markRows.any():
+            # The label was found.
+            # Get the second column of the data frame row for this location to get
+            # the elapsed time label.  This gives us access to time units, "seconds"
+            # for example. Convert to lower case to avoid inconsistency from causing
+            # searching errors.
+            offsetLabel = df_raw.iloc[markRows.idxmax()][idCol + 1].lower()
+            # Get the elapsed time values in second column of data, and start
+            # in the row following the row where the label was found.
+            offsets= df_raw[idCol + 1][markRows.idxmax() + 1:]
+            # :TRICKY: Test for 'millisecond' first since it contains
+            # the string 'seccond'. Labels will usually be plural, but leave the 's'
+            # off to be less restrictive.
+            if offsetLabel.find('milli') != -1:
+                # time offset in units of milliseconds
+                timeStamps = offsets.apply(lambda d: (startTime + pd.Timedelta(str(d) + 'milli')))
+            elif offsetLabel.find('sec') != -1:
+                # time offset in units of seconds
+                timeStamps = offsets.apply(lambda d: (startTime + pd.Timedelta(str(d) + 'sec')))
+            elif offsetLabel.find('min') != -1:
+                # time offset in units of minutes
+                timeStamps = offsets.apply(lambda d: (startTime + pd.Timedelta(str(d) + 'min')))
+            elif offsetLabel.find('hour') != -1:
+                # time offset in units of hours
+                timeStamps = offsets.apply(lambda d: (startTime + pd.Timedelta(str(d) + 'hr')))
+            else:
+                # unknown offset units. Can't create timestamps. Print a message and go
+                print('Elapsed time units could not be determined. Unalbe to process strain data.')
+                quit()
+        else:
+            # Units label not found.  Gartz to go...
+            print('\nERROR: No Elapsed Time label ("xxx Elapsed") column found. Unable to process strain data.')
+            quit()
+
+        # At this point, we processed the header, and now need to remove everything
+        # but the data, add the timestamps as an index, and a single header row using
+        # the tagNames as the header.
+        # drop the rows above the data (the header -- it isn't needed anymore)
+        df_raw.drop(df_raw.index[:idRow + 1], axis=0, inplace=True)
+        # now drop the two left most columns, the ID and the elapsed time
+        df_raw.drop(df_raw.columns[:2], axis=1, inplace=True)
+        # now rename the columns using the tag names.
+        df_raw.rename(columns=tagNames, inplace=True)
+        # now add the timestamps to the dataframe
+        df_raw['timestamp'] = timeStamps
+        # finally, set the timestamp column to be the index
+        df_raw.set_index('timestamp', inplace=True)
+        print(df_raw)
+        return df_raw
+        # end _procHeader()
+
+    def _sMerge(fileToMerge, df_base, sep, encoding):
+        """
+        This function merges data from the specified file name (fileToMerge)
+        with the base data (df_base), and returns the merged data.
+        The data to merge is read from a csv file, and must also be in the
+        strain gauge data data format (-s).
+
+        The file to merge has times and tags that may match or may be additional
+        to the source data. The data merge will make the source data wider if
+        there are new tags, and longer if there are new times. One or both may
+        happen.
+        """
+        try:
+            print('Merging file "' + fileToMerge + '".\n')
+            # use string as the data type for all columns to prevent automatic
+            # datatype detection. We don't know ahead of time how many columns are
+            # being read in, so we don't yet know the types.
+            # We want duplicate column names to be preserved as in.
+            # They will get filtered out as duplicates later.
+            # The default behavior of read_csv is to append a ".n" to the column name
+            # where n is an integer value starting at 1 and incrementing up for each
+            # duplicate found. The problem with this is later, this gets interpreted as
+            # a different tag if using some options.
+            # COMPILER: mangle_dupe_cols=False is supposed to preserve the duplicate
+            # column names by turning off the mangling described above.
+            # It is "not supported yet" but is in the documentation for
+            # Pandas 0.22 and maybe earler as being a feature!!
+            # It throws a ValueError if used.  As a work around, don't use
+            # mangle_dupe_cols=False, and use header=None instead of header=0 in the
+            # read_csv function. 
+            df_merge = pd.read_csv(fileToMerge, sep=sep,
+                                delim_whitespace=False, encoding=encoding,
+                                header=None, dtype = str, skipinitialspace=True)
+                                # mangle_dupe_cols=False)
+
+        except ValueError as ve:
+            print('ERROR opening the file specified with the -amx/archiveMergex \
+parameter: "' + fileToMerge + '".\n Check file name, file presence, and permissions.  \
+Unexpected encoding can also cause this error.')
             print(ve)
             quit()
-    else:
-        # no start time found.  Gartz to go...
-        print('\nERROR: No Start Time found. Unable to process strain data.')
-        quit()
 
-    # Get the tag names (assignments)
-    # Look for the label in the left column. If it exists, the resulting series
-    # will have a True value in the position corresponding to the row.
-    # If found, get the row, removing the first two columns.
-    markLabel = 'Assignment:'
-    markRows = df_source[idCol].str.match(markLabel, case=False, na=False)
-    if markRows.any():
-        # The label was found -- the row will be marked as true, which is considered
-        # greater than false, so it will be the index with the max value.
-        # Get the data frame row for this location, stripping off the first
-        # two columns which contain the label and a blank location corresponding
-        # to the elapsed time column.
-        tagNames = df_source.iloc[markRows.idxmax()][idCol + 2:]
-    else:
-        # Tag name label not found.  Gartz to go...
-        print('\nERROR: No Tag Name label ("Assignment") row found. Unable to process strain data.')
-        quit()
+        # The data to merge has a header. Process it so is in the same format
+        # as the base file.
+        df_merge = _procHeader(df_merge) # Note use of default labels
 
-    # Get the units (Reduction Method)
-    # Look for the label in the left column. If it exists, the resulting series
-    # will have a True value in the position corresponding to the row.
-    # If found, get the row, removing the first two columns.
-    markLabel = 'Reduction Method:'
-    markRows= df_source[idCol].str.match(markLabel, case=False, na=False)
-    if markRows.any():
-        # The label was found -- the row will be marked as true, which is considered
-        # greater than false, so it will be the index with the max value.
-        # Get the data frame row for this location, stripping off the first
-        # two columns which contain the label and a blank location corresponding
-        # to the elapsed time column.
-        units= df_source.iloc[markRows.idxmax()][idCol + 2:]
-        # Combine the tag from above, with the units so we don't need two rows
-        # to display both -- TagName (units)
-        # Tag name and units should be the same length, but just in case use min len
-        for colNum in range(min(tagNames.size, units.size)):
-            if units.iloc[colNum] and units.iloc[colNum].lower() != 'strain':
-                # there is a unit specified, and it isn't strain. Concat with tag name
-                tagNames.iloc[colNum] = tagNames.iloc[colNum] + ' (' + units.iloc[colNum] + ')'
-            elif units.iloc[colNum] and units.iloc[colNum].lower() == 'strain':
-                # there is a unit specified, but it is strain.
-                # Concat 'uStrain' with tag name (add the u).
-                tagNames.iloc[colNum] = tagNames.iloc[colNum] + ' (uStrain)'
-    else:
-        # Units label not found.  Gartz to go...
-        print('\nERROR: No Units label ("Reduction Method") row found. Unable to process strain data.')
-        quit()
-
-    # Get elapsed times (time offsets)
-    # Look for the label in the second column. If it exists, the resulting series
-    # will have a True value in the position corresponding to the row.
-    markLabel = 'Elapsed'
-    # note use of contains since the mark is not at the beginning
-    markRows = df_source[idCol + 1].str.contains(markLabel, case=False, na=False)
-    if markRows.any():
-        # The label was found.
-        # Get the second column of the data frame row for this location to get
-        # the elapsed time label.  This gives us access to time units, "seconds"
-        # for example. Convert to lower case to avoid inconsistency from causing
-        # searching errors.
-        offsetLabel = df_source.iloc[markRows.idxmax()][idCol + 1].lower()
-        # Get the elapsed time values in second column of data, and start
-        # in the row following the row where the label was found.
-        offsets= df_source[idCol + 1][markRows.idxmax() + 1:]
-        # :TRICKY: Test for 'millisecond' first since it contains
-        # the string 'seccond'. Labels will usually be plural, but leave the 's'
-        # off to be less restrictive.
-        if offsetLabel.find('milli') != -1:
-            # time offset in units of milliseconds
-            timeStamps = offsets.apply(lambda d: (startTime + pd.Timedelta(str(d) + 'milli')))
-        elif offsetLabel.find('sec') != -1:
-            # time offset in units of seconds
-            timeStamps = offsets.apply(lambda d: (startTime + pd.Timedelta(str(d) + 'sec')))
-        elif offsetLabel.find('min') != -1:
-            # time offset in units of minutes
-            timeStamps = offsets.apply(lambda d: (startTime + pd.Timedelta(str(d) + 'min')))
-        elif offsetLabel.find('hour') != -1:
-            # time offset in units of hours
-            timeStamps = offsets.apply(lambda d: (startTime + pd.Timedelta(str(d) + 'hr')))
-        else:
-            # unknown offset units. Can't create timestamps. Print a message and go
-            print('Elapsed time units could not be determined. Unalbe to process strain data.')
+        # Deal with duplicates in the merge file.
+        # Duplicates with this data format within the same file are problematic
+        # because they represent a tag with more than one value at the same timestamp.
+        # While this could be delt with when merging, it is an indication that the
+        # data may not be as expected. Error out so a person needs to take a look.
+        dups = listDuplicates(df_merge)
+        if dups:
+            # duplicates have been found.  Notify leave.
+            print('    ERROR: There are column names duplicated in the file "' + fileToMerge + '" specified \
+with the -amx/archiveMergex parameter.\nThis is not allowed with this type of data because it usually \
+means tag values would be ambiguous at a given time.\n\
+There will be no further processing.\nThe following column names are duplicated:')
+            print(dups)
             quit()
-    else:
-        # Units label not found.  Gartz to go...
-        print('\nERROR: No Elapsed Time label ("xxx Elapsed") column found. Unable to process strain data.')
-        quit()
 
-    # At this point, we processed the header, and now need to remove everything 
-    # but the data, add the timestamps as an index, and a single header row using
-    # the tagNames as the header.
-    # drop the rows above the data (the header -- it isn't needed anymore)
-    df_source.drop(df_source.index[:idRow + 1], axis=0, inplace=True)
-    # now drop the two left most columns, the ID and the elapsed time
-    df_source.drop(df_source.columns[:2], axis=1, inplace=True)
-    # now rename the columns using the tag names.
-    df_source.rename(columns=tagNames, inplace=True)
-    # now add the timestamps to the dataframe
-    df_source['timestamp'] = timeStamps
-    # finally, set the timestamp column to be the index
-    df_source.set_index('timestamp', inplace=True)
+        # Now that the source and merge data have both been indexed by timestamp,
+        # we can deal with duplicate value column names between the source and
+        # merge file.
+        # With this data format, this may or may not be problematic. If there
+        # are duplicated timestamps, they will get removed after merging.
+        # Detect duplicates and warn.
+        dups = listToListIntersection(df_base.columns.values, df_merge.columns.values)
+        if dups:
+            # duplicates have been found.  Notify and continue.
+            print('    WARNING: There are tags in the input file "' + args.inputFileName + '" that are duplicated\n\
+in the file "' + fileToMerge + '" specified with the -amx/archiveMergex parameter.\nThis is allowed, \
+but if the duplicate column or columns contain duplicate timestamps, then only \n\
+one value will be retained.\nThe following tags are duplicated:')
+            print(dups)
+            print()
+
+        # Now merge the data. Append rows (axis=0), which actually is appending
+        # to the index. Note that NaN values may result depending on which times
+        # and values are being merged, but these will get removed later.
+        df_base = pd.concat([df_base, df_merge], axis=0, sort=False)
+        # Drop the merge data as a matter of cleanup after it is maybe printed,
+        # and then return the merged data
+
+        # print diagnostic info if verbose is set
+        if args.verbose:
+            print('**** Merge Data ****')
+            print(df_merge)
+            print('**** Merged Data ****')
+            print(df_base)
+
+        del df_merge
+        return df_base
+        # end _sMerge()
+
+    df_source = _procHeader(df_source)
     print(df_source)
     quit()
     # In the normalized time data case, the first column is the timestamp, and
@@ -2225,7 +1768,6 @@ There will be no further processing.\nThe following column names are duplicated:
         try:
             df_source[tsName] = pd.to_datetime(df_source[tsName],
                                             errors='raise',
-                                            box = True,
                                             format=sourceTimeFormat,
                                             exact=False,
                                             #infer_datetime_format = True,
@@ -2236,7 +1778,6 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
             print(ve)
             df_source[tsName] = pd.to_datetime(df_source[tsName],
                                             errors='coerce',
-                                            box = True,
                                             infer_datetime_format = True,
                                             origin = 'unix')
     # Remove any NaN/NaT values as a result of conversion
@@ -2333,7 +1874,6 @@ There will be no further processing.\nThe following column names are duplicated:
             try:
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='raise',
-                                                box = True,
                                                 format=sourceTimeFormat,
                                                 exact=False,
                                                 #infer_datetime_format = True,
@@ -2344,7 +1884,6 @@ There will be no further processing.\nThe following column names are duplicated:
                 print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
-                                                box = True,
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
@@ -2471,7 +2010,6 @@ There will be no further processing.\nThe following column names are duplicated:
             try:
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='raise',
-                                                box = True,
                                                 format=sourceTimeFormat,
                                                 exact=False,
                                                 #infer_datetime_format = True,
@@ -2482,7 +2020,6 @@ There will be no further processing.\nThe following column names are duplicated:
                 print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
-                                                box = True,
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
@@ -2609,7 +2146,6 @@ There will be no further processing.\nThe following column names are duplicated:
             try:
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='raise',
-                                                box = True,
                                                 format=sourceTimeFormat,
                                                 exact=False,
                                                 #infer_datetime_format = True,
@@ -2620,7 +2156,6 @@ There will be no further processing.\nThe following column names are duplicated:
                 print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
-                                                box = True,
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
@@ -2748,7 +2283,6 @@ There will be no further processing.\nThe following column names are duplicated:
             try:
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='raise',
-                                                box = True,
                                                 format=sourceTimeFormat,
                                                 exact=False,
                                                 #infer_datetime_format = True,
@@ -2759,7 +2293,6 @@ There will be no further processing.\nThe following column names are duplicated:
                 print(ve)
                 df_merge[tsName] = pd.to_datetime(df_merge[tsName],
                                                 errors='coerce',
-                                                box = True,
                                                 infer_datetime_format = True,
                                                 origin = 'unix')
         # Remove any NaN/NaT values as a result of conversion
