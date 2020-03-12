@@ -30,19 +30,19 @@ If a time format is not specified with the -stf option, then the format is assum
 to be YYYY-MM-DD HH:mm:ss.mmm.
 
 **NOTE:** With the exception of the Time Bias column, the time normalized format
-is the same as the fomat of the created output file.  This means an output file
+is the same as the format of the created output file.  This means an output file
 can be used as a source file when using the -n option.  This is helpful when two
 files of different formats need to be merged:  Process each file that needs to be
 merged into separate intermediate output files. Use the -noExportMsg option.
 then use the intermediate output files as source files with the -n option and
 the -am1..-am4 options.
 
-In the case of a displaceent export file (the -s command line argument), the
+In the case of a strain gauge/ displacement export file (the -s command line argument), the
 data file has several rows of header information, followed by data columns
 that are organized are as follows:
 Sample ID, Time offset from start time, Tag1 Value, Tag2 Value, Tag3 Value ...
 In the rows of header data, most importantly is the start time, the tag names,
-and measurment units.  The value timestamp is derived from the start time in
+and measurement units.  The value timestamp is derived from the start time in
 the header, and the time offset from the row data.
 If a time format is not specified with the -stf option, then the start time
 format is assumed to be MM/DD/YYYY HH:mm:ss am/pm.
@@ -61,7 +61,7 @@ encoding is "utf-8". If another encoding needs to be specified, it can be
 done using the -se, -sourceEncoding, -de, or -destEncoding options.
 
 It is assumed that the first row is a header. In the case of a historical
-trend input file (-t option), the tag names are derrived from the header.
+trend input file (-t option), the tag names are derived from the header.
 In the case of a archive data input file (-a option), the tag names are
 pulled from the data.
 
