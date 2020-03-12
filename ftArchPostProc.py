@@ -1559,7 +1559,7 @@ This cell should contain the data start time. Unable to process strain data.')
             # Combine the tag from above, with the units so we don't need two rows
             # to display both -- display: TagName (units)
             # Tag name and units should be the same length, but just in case use min len.
-            # If the original data was empty, the contents is nan, but a float type. 
+            # If the original data was empty, the contents is nan, but a float type.
             # Ignore an empty string or a float nan.
             for colNum in range(min(tagNames.size, units.size)):
                 if units.iloc[colNum] and str(units.iloc[colNum]) != 'nan' and units.iloc[colNum].lower() != 'strain':
@@ -1602,12 +1602,8 @@ This cell should contain the data start time. Unable to process strain data.')
         # the tagNames as the header.
         # First drop the rows above the data (the header -- it isn't needed anymore)
         df_raw.drop(df_raw.index[:idRow + 1], axis=0, inplace=True)
-        # Now drop any column which is all NaN. This can happen if there were
-        # additional columns in the header rows that was to the right of the data.
-        # This would get dropeed with the header, leaving empty columns.
-        df_raw.dropna(axis='columns',how='all', inplace=True)
-        # Now make sure all the offsets are numbers so there are no problems when
-        # making timestamps.  A row without a valid timestamp isn't useful, so 
+        # Now make sure all the time offsets are numbers so there are no problems when
+        # making timestamps.  A row without a valid timestamp isn't useful, so
         # drop any row with an invalid time offset. Use to_numeric to generate
         # NaN values where they are not numeric, then drop these.
         df_raw[idCol + 1] = df_raw[idCol + 1].apply(pd.to_numeric, errors='coerce')
@@ -1615,7 +1611,7 @@ This cell should contain the data start time. Unable to process strain data.')
         # Now create a series of timestamps from the start time and the elapsed times.
         # Use the offsetLabel above and offset values populated above.
         # :TRICKY: Test for 'millisecond' first since it contains
-        # the string 'seccond'. Labels will usually be plural and full names, 
+        # the string 'seccond'. Labels will usually be plural and full names,
         # shorten them to be less restrictive, and allow options if they are clear.
         try:
             if offsetLabel.find('milli') != -1:
@@ -1652,11 +1648,18 @@ Unable to process strain data.')
         # All the columns are data columns, and the time stamp has not yet been added.
         # Rename the columns using the tag names.
         df_raw.rename(columns=tagNames, inplace=True)
-        # Now insert the timestamps as a column. Position does not matter, as it 
+        # Now insert the timestamps as a column. Position does not matter, as it
         # will become the index.
         df_raw['timestamp'] = timeStamps
         # finally, set the timestamp column to be the index
         df_raw.set_index('timestamp', inplace=True)
+        # Finally drop any column which is all NaN. This can happen if there were
+        # additional columns in the header rows that was to the right of the data.
+        # This would get dropeed with the header, leaving empty columns.
+        # Note: Doing this earlier is tricky if there happens to be empty columns
+        # to the left of the ID column. In thie case, the column value of idCol
+        # would be wrong after dropping the empty left columns.
+        df_raw.dropna(axis='columns',how='all', inplace=True)
         return df_raw
         # end _procHeader()
 
@@ -1693,7 +1696,7 @@ Unable to process strain data.')
             # Pandas 0.22 and maybe earler as being a feature!!
             # It throws a ValueError if used.  As a work around, don't use
             # mangle_dupe_cols=False, and use header=None instead of header=0 in the
-            # read_csv function. 
+            # read_csv function.
             df_merge = pd.read_csv(fileToMerge, sep=sep,
                                 delim_whitespace=False, encoding=encoding,
                                 header=None, dtype = str, skipinitialspace=True)
@@ -1709,7 +1712,6 @@ Unexpected encoding can also cause this error.')
         # The data to merge has a header. Process it so is in the same format
         # as the base file.
         df_merge = _procHeader(df_merge) # Note use of default labels
-
         # Deal with duplicates in the merge file.
         # Duplicates with this data format within the same file are problematic
         # because they represent a tag with more than one value at the same timestamp.
@@ -1741,6 +1743,13 @@ one value will be retained.\nThe following tags are duplicated:')
             print(dups)
             print()
 
+        # Now merge the data. Append columns (axis = 1), keeping the header rows.
+        # There may be NaN values present when/if columns are diffenrent length.
+        # This isn't different than in the input file.
+        #df_base = pd.concat([df_base, df_merge], axis=1, join='outer', sort=False)
+        # Drop the merge data as a matter of cleanup after it is maybe printed,
+        # and then return the merged data
+        #
         # Now merge the data. Append rows (axis=0), which actually is appending
         # to the index. Note that NaN values may result depending on which times
         # and values are being merged, but these will get removed later.
@@ -1762,7 +1771,7 @@ one value will be retained.\nThe following tags are duplicated:')
     df_source = _procHeader(df_source)
 
     # If there are files specified to merge, merge them with the input file before
-    # further processing. 
+    # further processing.
     # Merge File 1
     if args.archiveMerge1 is not None:
         df_source = _sMerge(args.archiveMerge1, df_base=df_source,
