@@ -1,70 +1,91 @@
 # ftArchPostProc
 
- **Final Test Archive Data Post Processing**
- This program accepts an input csv file, post processes it, and creates a csv
- output file.  An export control message is included at the head of the output
- file, unless the -noExportMsg argument is used.
+# Final Test Archive Data Post Processing
+This program accepts an input csv file, post processes it, and creates a csv
+output file.  An export control message is included at the head of the output
+file, unless the -noExportMsg argument is used.
 
- Included is a helper bash script called createExportFiles.sh which needs to be
- edited for the file name specifics, but is helpful in creating a batch of export
- files from source csv files.  It takes one command line argument: -t or -a or -n
- and this argument gets used to run ftpp with the corresponding option.
- 
- Given an input file, the program will produce a .csv file with the name
- specified as the outputFileName with the format: Timestamp, Tag1 Value, Tag2
- Value ... where the column names are the tag names, and the columns are ordered
- by name
+Given an input file, the program will produce a .csv file with the name
+specified as the outputFileName with the format:
+  Timestamp, Tag1 Value, Tag2 Value ...
+where the column names are the tag names, and the columns are
+ordered by name
 
- In the case of a historical trend generated file (the -t command line argument),
- the data columns are as follows:
-   Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
- and the timestamps are not synchronized.  If a time format is not specified
- with the -stf option, then the format is assumed to be MM-DD-YYYY hh:mm:ss am/pm.
+In the case of a historical trend generated file (the -t command line argument),
+the data columns are as follows:
+  Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
+and the timestamps are not synchronized.  If a time format is not specified
+with the -stf option, then the format is assumed to be MM/DD/YYYY hh:mm:ss am/pm.
 
- In the case of a archive export file (the -a command line argument), the data
- columns are as follows:
-   ValueId,Timestamp,value,quality,flags and there are
- normally multiple valueIDs each at multiple timestamps. If a time format is not
- specified with the -stf option, then the format is assumed to be YYYY-MM-DD
- HH:mm:ss.mmm.
+In the case of a archive export file (the -a command line argument), the data
+columns are as follows:
+  ValueId,Timestamp,value,quality,flags and there are
+normally multiple valueIDs each at multiple timestamps. If a time format is not
+specified with the -stf option, then the format is assumed to be YYYY-MM-DD
+HH:mm::ss.mmm.
 
- In the case of a time normalized export file (the -n command line argument), the
- data columns are as follows: Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ... If
- a time format is not specified with the -stf option, then the format is assumed
- to be YYYY-MM-DD HH:mm:ss.mmm.
+In the case of a time normalized export file (the -n command line argument), the
+data columns are as follows: Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
+If a time format is not specified with the -stf option, then the format is assumed
+to be YYYY-MM-DD HH:mm:ss.mmm.
 
- Note: The -h, -n, and -a options are mutually exclusive. One and only one must
- be specified.
+**NOTE:** With the exception of the Time Bias column, the time normalized format
+is the same as the fomat of the created output file.  This means an output file
+can be used as a source file when using the -n option.  This is helpful when two
+files of different formats need to be merged:  Process each file that needs to be
+merged into separate intermediate output files. Use the -noExportMsg option.
+then use the intermediate output files as source files with the -n option and
+the -am1..-am4 options.
 
- Field delimiters can be specified for the input and output files. The
- default field delimiter is the comma (","). If another delimiter needs to
- be specified, it can be done so using the -sd, -sourceDelimiter, -dd, or
- -destDelimiter options. If more than one character is specified, the
- delimiter will be interpreted as a regular expression.
+In the case of a displaceent export file (the -s command line argument), the
+data file has several rows of header information, followed by data columns
+that are organized are as follows:
+Sample ID, Time offset from start time, Tag1 Value, Tag2 Value, Tag3 Value ...
+In the rows of header data, most importantly is the start time, the tag names,
+and measurment units.  The value timestamp is derived from the start time in
+the header, and the time offset from the row data.
+If a time format is not specified with the -stf option, then the start time
+format is assumed to be MM/DD/YYYY HH:mm:ss am/pm.
 
- File encoding can be specified for the input and output files. The default
- encoding is "utf-8". If another encoding needs to be specified, it can be
- done using the -se, -sourceEncoding, -de, or -destEncoding options.
+Note: The -t, -n, -a, and -s options are mutually exclusive. One and only one must
+be specified.
 
- It is assumed that the first row is a header. Tag names are derrived from the
- first row cell contents.
- 
+Field delimiters can be specified for the input and output files. The
+default field delimiter is the comma (","). If another delimiter needs to
+be specified, it can be done so using the -sd, -sourceDelimiter, -dd, or
+-destDelimiter options. If more than one character is specified, the
+delimiter will be interpreted as a regular expression.
+
+File encoding can be specified for the input and output files. The default
+encoding is "utf-8". If another encoding needs to be specified, it can be
+done using the -se, -sourceEncoding, -de, or -destEncoding options.
+
+It is assumed that the first row is a header. In the case of a historical
+trend input file (-t option), the tag names are derrived from the header.
+In the case of a archive data input file (-a option), the tag names are
+pulled from the data.
 
 ## Command line arguments are:
  
 	 inputFileName (required, positional). The source data csv file.
-	
+
 	 outputFileName (required, positional). The .csv output file name.
-	
-	 -t, (required and mutually exclusive with -a).  Input file
+
+	 -t, (required and mutually exclusive with -a, -s, and -n).  Input file
 	 is a historical trend export file.
 	 Tag1 TimeStamp, Tag1 Value, Tag2 TimeStamp, Tag2Timestamp ...
 	
-	 -a (required and mutually exclusive with -t and -n). Input file is a archive
+	 -a (required and mutually exclusive with -t, -s and -n). Input file is a archive
 	 export file. The format is:
 	 ValueId, Timestamp, value, quality, flags
 	
-	 -n (required and mutuall exclusive with -a and -t). Input file is a time
+	 -s (required and mutually exclusive with -a, -t, and -n). Input file is a
+     strain gauge data file. The format is:
+     the data file has several rows of header information, followed by data columns
+	 that are organized are as follows:
+	 Sample ID, Time offset from start time, Tag1 Value, Tag2 Value, Tag3 Value ...
+
+	 -n (required and mutuall exclusive with -t, -a and -s). Input file is a time
 	 normalized file. The format is: Timestamp, Tag 1 Value, Tag 2 Value, Tag 3 Value
 	 ...
 	

@@ -28,9 +28,17 @@
 # HH:mm::ss.mmm.
 
 # In the case of a time normalized export file (the -n command line argument), the
-# data columns are as follows: Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ... If
+# data columns are as follows: Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ... If
 # a time format is not specified with the -stf option, then the format is assumed
 # to be YYYY-MM-DD HH:mm:ss.mmm.
+#
+# NOTE: With the exception of the Time Bias column, the time normalized format
+# is the same as the format of the created output file.  This means an output file
+# can be used as a source file when using the -n option.  This is helpful when two
+# files of different formats need to be merged:  Process each file that needs to be
+# merged into separate intermediate output files. Use the -noExportMsg option.
+# then use the intermediate output files as source files with the -n option and
+# the -am1..-am4 options.
 #
 # In the case of a strain gauge export file (the -s command line argument), the
 # data file has several rows of header information, followed by data columns
@@ -42,7 +50,7 @@
 # If a time format is not specified with the -stf option, then the start time
 # format is assumed to be MM/DD/YYYY HH:mm:ss am/pm.
 #
-# Note: The -h, -n, -a, and -s options are mutually exclusive. One and only one must
+# Note: The -t, -n, -a, and -s options are mutually exclusive. One and only one must
 # be specified.
 #
 # Field delimiters can be specified for the input and output files. The
@@ -193,7 +201,7 @@ eplStr="""Final Test Archive Data Post Processing
  output file.  An export control message is included at the head of the output
  file, unless the -noExportMsg argument is used.
 
- Given an input file, the program will produce a *.csv file with the name
+ Given an input file, the program will produce a .csv file with the name
  specified as the outputFileName with the format:
    Timestamp, Tag1 Value, Tag2 Value ...
  where the column names are the tag names, and the columns are
@@ -213,9 +221,17 @@ eplStr="""Final Test Archive Data Post Processing
  HH:mm::ss.mmm.
 
  In the case of a time normalized export file (the -n command line argument), the
- data columns are as follows: Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ... If
- a time format is not specified with the -stf option, then the format is assumed
+ data columns are as follows: Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
+ If a time format is not specified with the -stf option, then the format is assumed
  to be YYYY-MM-DD HH:mm:ss.mmm.
+
+ NOTE: With the exception of the Time Bias column, the time normalized format
+ is the same as the fomat of the created output file.  This means an output file
+ can be used as a source file when using the -n option.  This is helpful when two
+ files of different formats need to be merged:  Process each file that needs to be
+ merged into separate intermediate output files. Use the -noExportMsg option.
+ then use the intermediate output files as source files with the -n option and
+ the -am1..-am4 options.
 
  In the case of a displaceent export file (the -s command line argument), the
  data file has several rows of header information, followed by data columns
@@ -227,7 +243,7 @@ eplStr="""Final Test Archive Data Post Processing
  If a time format is not specified with the -stf option, then the start time
  format is assumed to be MM/DD/YYYY HH:mm:ss am/pm.
 
- Note: The -h, -n, -a, and -s options are mutually exclusive. One and only one must
+ Note: The -t, -n, -a, and -s options are mutually exclusive. One and only one must
  be specified.
 
  Field delimiters can be specified for the input and output files. The
@@ -1126,13 +1142,6 @@ elif args.n and len(headerList) >= 3:
     print('\nNormalized Time Data Specified. The source data is expected to \
 have the following format:\n\
     TimeStamp, Time Bias, Tag1 Value, Tag2 Value, ...\n')
-    # TODO: Time Bias support
-    # KLUDGE: Drop the time bias as the times are already in local time, which
-    # is what is desired. May be better to do something smarter with it, like
-    # modify the TsIdxData object to be UTC and timezone aware.
-    # Timestamps are in local time. No need for the bias column. Drop it.
-    # NOTE: This is needed in the merge sections also!!
-    df_source.drop(columns=[headerList[1]], inplace=True, errors='ignore')
 
     # Deal with duplicates in input file.
     # Duplicates with this data format within the same file are problematic
@@ -1238,9 +1247,6 @@ parameter: "' + fileToMerge + '".\n Check file name, file presence, and permissi
 Unexpected encoding can also cause this error.')
             print(ve)
             quit()
-
-        # Drop the time bias (second) column
-        df_merge.drop(columns=[df_merge.columns[1]], inplace=True, errors='ignore')
 
         # Deal with duplicates in the merge file.
         # Duplicates with this data format within the same file are problematic
