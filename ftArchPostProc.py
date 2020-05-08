@@ -38,7 +38,8 @@
 # files of different formats need to be merged:  Process each file that needs to be
 # merged into separate intermediate output files. Use the -noExportMsg option.
 # then use the intermediate output files as source files with the -n option and
-# the -am1..-am4 options.
+# the -am1..-am4 options.  To better facilitate this type of operation,
+# the Time Bias column is left off the output file.
 #
 # In the case of a strain gauge export file (the -s command line argument), the
 # data file has several rows of header information, followed by data columns
@@ -231,7 +232,8 @@ eplStr="""Final Test Archive Data Post Processing
  files of different formats need to be merged:  Process each file that needs to be
  merged into separate intermediate output files. Use the -noExportMsg option.
  then use the intermediate output files as source files with the -n option and
- the -am1..-am4 options.
+ the -am1..-am4 options.  To better facilitate this type of operation,
+ the Time Bias column is left off the output file.
 
  In the case of a displaceent export file (the -s command line argument), the
  data file has several rows of header information, followed by data columns
@@ -815,7 +817,9 @@ then only one value will be retained.\nThe following tags are duplicated:')
         # Include the instr name in the timestamp column label so it can be
         # identified standalone
         tsName = 'timestamp_' + instName
-        valName = 'value_' + instName
+        # Add the value prefix if it isn't there already.
+        # This is helpful when using an output file as an input file
+        valName = instName if instName.startswith('value') else 'value_' + instName
         # print a message showing what we are processing
         print('\nProcessing ' + instName)
         # Create a new instrument object and use the above column names.
@@ -1081,7 +1085,9 @@ the source data.  Timestamps may be incorrect, and/or some rows may be missing.'
         # include the instr name in the timestamp column label so it can be
         # identified standalone
         tsName = 'timestamp_' + instName
-        valName = 'value_' + instName
+        # Add the value prefix if it isn't there already.
+        # This is helpful when using an output file as an input file
+        valName = instName if instName.startswith('value') else 'value_' + instName
         # create a new dataframe for the instrument. Use the id index to get
         # all the timestamped values for the current id. No need for the
         # tag name (it is the same for every row, and captured above, so leave
@@ -1389,50 +1395,54 @@ one value will be retained.\nThe following tags are duplicated:')
     # merged.
     for idx in range(0, len(headerList)):
         instName = headerList[idx]
-        # replace the spaces, hyphens, and periods with underscores
-        instName = instName.replace(' ', '_')
-        instName = instName.replace('-', '_')
-        instName = instName.replace('.', '_')
-        # Generate timestamp and value field (column) names.
-        # These will be used for the exported data.
-        # Include the instr name in the timestamp column label so it can be
-        # identified standalone
-        tsName = 'timestamp_' + instName
-        valName = 'value_' + instName
-        # print a message showing what we are processing
-        print('\nProcessing ' + instName)
-        # Create a new instrument object and use the above column names.
-        tid_inst = TsIdxData(instName, tsName, valName,
-                             df_source.iloc[:,idx],
-                             args.valueQuery, startArg, endArg,
-                             sourceTimeFormat, forceColNames=True)
-        # See if instrument is already in the list. If so append the
-        # data to an existing instrument object already in the object list.
-        # If not, then append a new object with the new data to the name and
-        # object lists.
-        if instName in instDataNames:
-            # An instrument with the same name already exists.
-            # Append this data to it
-            idx = instDataNames.index(instName)
-            print('Inst in list at index ' + str(idx) + '. Appending data.')
+        # skip the Bias column -- no op in this case
+        if instName != 'Bias':
+            # replace the spaces, hyphens, and periods with underscores
+            instName = instName.replace(' ', '_')
+            instName = instName.replace('-', '_')
+            instName = instName.replace('.', '_')
+            # Generate timestamp and value field (column) names.
+            # These will be used for the exported data.
+            # Include the instr name in the timestamp column label so it can be
+            # identified standalone
+            tsName = 'timestamp_' + instName
+            # Add the value prefix if it isn't there already.
+            # This is helpful when using an output file as an input file
+            valName = instName if instName.startswith('value') else 'value_' + instName
+            # print a message showing what we are processing
+            print('\nProcessing ' + instName)
+            # Create a new instrument object and use the above column names.
+            tid_inst = TsIdxData(instName, tsName, valName,
+                                 df_source.iloc[:,idx],
+                                 args.valueQuery, startArg, endArg,
+                                 sourceTimeFormat, forceColNames=True)
+            # See if instrument is already in the list. If so append the
+            # data to an existing instrument object already in the object list.
+            # If not, then append a new object with the new data to the name and
+            # object lists.
+            if instName in instDataNames:
+                # An instrument with the same name already exists.
+                # Append this data to it
+                idx = instDataNames.index(instName)
+                print('Inst in list at index ' + str(idx) + '. Appending data.')
 
-            # Appending the data will apply previously specified value queries
-            # and time filtering
-            instData[idx].appendData(tid_inst.data, 0) # don't ignore any rows
-        else:
-            # This instrument is not in the instrument list yet.
-            # Append it to the name list and the object list
-            print('Inst not yet seen. Appending new instrument to list of instruments.')
-            instDataNames.append(instName)
-            # Make an object with the instrument name, labels and data frame
-            # instrument data object, and append it to the list.
-            # Querying of value and filtering of timestamps will happen during
-            # construction of the object
-            instData.append(tid_inst)
+                # Appending the data will apply previously specified value queries
+                # and time filtering
+                instData[idx].appendData(tid_inst.data, 0) # don't ignore any rows
+            else:
+                # This instrument is not in the instrument list yet.
+                # Append it to the name list and the object list
+                print('Inst not yet seen. Appending new instrument to list of instruments.')
+                instDataNames.append(instName)
+                # Make an object with the instrument name, labels and data frame
+                # instrument data object, and append it to the list.
+                # Querying of value and filtering of timestamps will happen during
+                # construction of the object
+                instData.append(tid_inst)
 
-        # The instrument data is now contained in the instrument InstData object.
-        # Delete the instrument object to free up resources.
-        del tid_inst
+            # The instrument data is now contained in the instrument InstData object.
+            # Delete the instrument object to free up resources.
+            del tid_inst
 
     # The data is now in instData in data frames. Done with the source data. Delete it.
     del df_source
@@ -1829,7 +1839,9 @@ one value will be retained.\nThe following tags are duplicated:')
         # Include the instr name in the timestamp column label so it can be
         # identified standalone
         tsName = 'timestamp_' + instName
-        valName = 'value_' + instName
+        # Add the value prefix if it isn't there already.
+        # This is helpful when using an output file as an input file
+        valName = instName if instName.startswith('value') else 'value_' + instName
         # print a message showing what we are processing
         print('\nProcessing ' + instName)
         # Create a new instrument object and use the above column names.
