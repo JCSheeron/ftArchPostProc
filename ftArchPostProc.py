@@ -132,10 +132,19 @@
 # of all the data timestamps is used.
 #
 # -stf or --sourceTimeFormat (optional, default=None) Specify the format of the
-# source data time format, as a string. Use the following placeholders: %m minutes,
-# %d days, %Y 4 digit year, %y two digit year, %H hours (24hr format), %I hours (12
-# hr format), %M minutes, %S seconds, %p AM/PM. If no format is specified, than the
-# format is determined by the -t, -a, or -n option.
+# source data time format, as a string. Use the following placeholders:
+# %Y 4 digit year, %y two digit year, %m month (zero padded), %b month abbreviated
+# local (Jan Feb Mar...), %B month full name, %d days (zero padded),
+# %H hours (24hr format), %I hours (12 hr format), %M minutes, %S seconds,
+# %p AM/PM. If no format is specified, than the format is determined bythe -t, -a, or -n option.
+#
+# -dtf or --destTimeFormat (optional, default=None) Specify the format of the
+# destination data time format, as a string. Use the following placeholders:
+# %Y 4 digit year, %y two digit year, %m month (zero padded), %b month abbreviated
+# local (Jan Feb Mar...), %B month full name, %d days (zero padded),
+# %H hours (24hr format), %I hours (12 hr format), %M minutes, %S seconds,
+# %p AM/PM. If no format is specified, than the format will be the same as the
+# sourceTimeFormat (-stf).
 #
 # -rs or --resample (optional, default=None) Resample the data. This is usually
 # used to "downsample" data. For example, create an output file with 1 sample
@@ -322,10 +331,20 @@ eplStr="""Final Test Archive Data Post Processing
  of all the data timestamps is used.
 
  -stf or --sourceTimeFormat (optional, default=None) Specify the format of the
- source data time format, as a string. Use the following placeholders: %m minutes,
- %d days, %Y 4 digit year, %y two digit year, %H hours (24hr format), %I hours (12
- hr format), %M minutes, %S seconds, %p AM/PM. If no format is specified, than the
- format is determined by the -t, -a, -s, or -n option.
+ source data time format, as a string. Use the following placeholders:
+ %Y 4 digit year, %y two digit year, %m month (zero padded), %b month abbreviated
+ local (Jan Feb Mar...), %B month full name, %d days (zero padded),
+ %H hours (24hr format), %I hours (12 hr format), %M minutes, %S seconds,
+ %p AM/PM. If no format is specified, than the format is determined by
+ the -t, -a, -s or -n option.
+
+ -dtf or --destTimeFormat (optional, default=None) Specify the format of the
+ destination data time format, as a string. Use the following placeholders:
+ %Y 4 digit year, %y two digit year, %m month (zero padded), %b month abbreviated
+ local (Jan Feb Mar...), %B month full name, %d days (zero padded),
+ %H hours (24hr format), %I hours (12 hr format), %M minutes, %S seconds, 
+ %p AM/PM. If no format is specified, than the format will be the same as the 
+ sourceTimeFormat (-stf).
 
  -rs or --resample (optional, default=None) Resample the data. This is usually
  used to "downsample" data. For example, create an output file with 1 sample
@@ -406,11 +425,21 @@ derived from the data, and the latest of all the data timestamps is used.')
 parser.add_argument('-stf', '--sourceTimeFormat', \
                     default=None, metavar='', \
                     help='Specify the format of the source data time format, \
-as a string. Use the following placeholders:%%m month, %%d day, %%Y 4 digit \
+as a string. Use the following placeholders:%%m month (zero padded number), \
+%%b (month spelled out abbreviated), %%B (month spelled out), %%d day, %%Y 4 digit \
 year, %%y two digit year, %%H hour (24hr format) %%I hour (12 hr format), %%M \
 minute, %%S second, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
-If no format is specified, than the format is determined by the -t, -a, or -n \
+If no format is specified, than the format is determined by the -t, -a, -s or -n \
 option.')
+parser.add_argument('-dtf', '--destTimeFormat', \
+                    default=None, metavar='', \
+                    help='Specify the format of the destination data time format, \
+as a string. Use the following placeholders:%%m month (zero padded number),
+%%b (month spelled out abbreviated), %%B (month spelled out), %%d day, %%Y 4 digit \
+year, %%y two digit year, %%H hour (24hr format) %%I hour (12 hr format), %%M \
+minute, %%S second, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
+If no format is specified, than the format is will be the same as the source time \
+format.')
 parser.add_argument('-rs', '--resample', default=None, metavar='', \
                     help='Resample the data. This is usually \
  used to "downsample" data. For example, create an output file with 1 sample \
@@ -471,6 +500,7 @@ args = parser.parse_args()
 # args.startTime        string Optional start date time
 # args.endTime          string Options end date time
 # args.sourceTimeFormat string Format string for source data timestamps
+# args.destTimeFormat   string Format string for destination data timestamps
 # args.resample         string Resample period. Default is 'S' or 1 sample/sec.
 # args.stats            string Stats to calc. Value, min, max, ave, std dev.
 # args.noExportMsg      True/False Exclude export control message when set
@@ -552,10 +582,10 @@ else:
 # force the stats argument to a lower case string so they are case insensitive.
 stats = str(args.stats).lower()
 
-# Use the specified argument for stf, or use -t/-a/-n/-s option to
-# determine the stf
+# Use the specified argument for the source time format, or use the
+# -t/-a/-n/-s option to determine the source time format.
 if args.sourceTimeFormat is not None:
-    # a source time has been specified. Use it over the other defaults
+    # a source time format has been specified. Use it over the other defaults
     # make sure the source timestamp format argument is a string
     sourceTimeFormat = str(args.sourceTimeFormat)
 elif args.t:
@@ -571,6 +601,16 @@ elif args.n:
 elif args.s:
     # no format specified. Use the default for this option
     sourceTimeFormat = '%m/%d/%Y %I:%M:%S %p'
+
+# Use the specified argument for the destination time format, or use the source
+# time format if nothing was specified.
+if args.destTimeFormat is not None:
+    # a destination time format has been specified. Use it over the other defaults
+    # make sure the destination timestamp format argument is a string
+    destTimeFormat = str(args.destTimeFormat)
+else
+    # no destination time format specified. Make it the same as the sourceTimeFormat.
+    destTimeFormat = sourceTimeFormat
 
 # **** read the csv file into a data frame.
 # The first row is treated as the header, except for in the -s case, and then
@@ -2061,16 +2101,10 @@ resample argument.')
 
         try:
             # **** Write the destination data frame to the output file
-            # Include frac sec if frequency is < 1 sec
-            if resampleArg < to_offset('S'):
-                df_dest.to_csv(outFile, sep=args.destDelimiter,
-                               encoding=args.destEncoding,
-                               date_format ='%Y-%b-%d %H:%M:%S.%f')
-            else:
-                # no need for fractional sec
-             df_dest.to_csv(outFile, sep=args.destDelimiter,
+            # Use the specified format for the date/time
+            df_dest.to_csv(outFile, sep=args.destDelimiter,
                            encoding=args.destEncoding,
-                           date_format ='%Y-%b-%d %H:%M:%S')
+                           date_format=destTimeFormat)
         except ValueError as ve:
             print('\nERROR writing data to the file. Output file content is suspect.\n')
             print('Error: ', sys.exc_info())
