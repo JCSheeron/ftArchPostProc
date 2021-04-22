@@ -96,6 +96,13 @@
 #   Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
 # where timestamp default format is yyyy-mm-dd hh:mm:ss.nnn (24 hr)
 #
+# -noBias (optional, default=False). Used with -n option only, ignored with -t, -a, -s.
+# There is no 'Bias' column in the -n source file.  In other words, the
+# normalized export file format is:
+#   Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ...
+# where timestamp default format is yyyy-mm-dd hh:mm:ss.nnn (24 hr)
+# which is the same as the -n format without the bias column.
+#
 # -am1, -am2, -am3, -am4 or --archiveMerge (optional, default=None). Archive Merge.
 # Merge these named files with the data in the inputFileName before processing.
 # Must have the same format/layout as the input file.
@@ -296,7 +303,14 @@ eplStr="""Final Test Archive Data Post Processing
  normalized export file.  The format is:
    Timestamp, Time Bias, Tag1 Value, Tag2 Value, Tag3 Value ...
 
- -am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
+ -noBias (optional, default=False). Used with -n option only, ignored with -t, -a, -s.
+ There is no "Bias" column in the -n source file.  In other words, the
+ normalized export file format is:
+   Timestamp, Tag1 Value, Tag2 Value, Tag3 Value ...
+ where timestamp default format is yyyy-mm-dd hh:mm:ss.nnn (24 hr)
+ which is the same as the -n format without the bias column.
+
+-am1, -am2, -am3, -am4 or --archiveMergen (optional, default=None). Archive Merge.
  Merge these named files with the data in the inputFileName before processing.
  Must have the same format/layout as the input file.
 
@@ -342,8 +356,8 @@ eplStr="""Final Test Archive Data Post Processing
  destination data time format, as a string. Use the following placeholders:
  %Y 4 digit year, %y two digit year, %m month (zero padded), %b month abbreviated
  local (Jan Feb Mar...), %B month full name, %d days (zero padded),
- %H hours (24hr format), %I hours (12 hr format), %M minutes, %S seconds, 
- %p AM/PM. If no format is specified, than the format will be the same as the 
+ %H hours (24hr format), %I hours (12 hr format), %M minutes, %S seconds,
+ %p AM/PM. If no format is specified, than the format will be the same as the
  sourceTimeFormat (-stf).
 
  -rs or --resample (optional, default=None) Resample the data. This is usually
@@ -380,6 +394,8 @@ parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpForm
                                  description=descrStr, epilog=eplStr)
 parser.add_argument('inputFileName', help='Input data file (csv)')
 parser.add_argument('outputFileName', help= 'Output data file (csv)')
+parser.add_argument('-noBias', action='store_true', default=False, \
+                    help='There is no bias column. Used with -n option.')
 parser.add_argument('-am1', '--archiveMerge1', default=None, metavar='', \
                    help='Merge this named file with the data in the \
 inputFileName before processing. Must be used with the -a option. \
@@ -434,7 +450,7 @@ option.')
 parser.add_argument('-dtf', '--destTimeFormat', \
                     default=None, metavar='', \
                     help='Specify the format of the destination data time format, \
-as a string. Use the following placeholders:%%m month (zero padded number),
+as a string. Use the following placeholders:%%m month (zero padded number), \
 %%b (month spelled out abbreviated), %%B (month spelled out), %%d day, %%Y 4 digit \
 year, %%y two digit year, %%H hour (24hr format) %%I hour (12 hr format), %%M \
 minute, %%S second, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
@@ -471,6 +487,7 @@ head of the output file when specified.')
 parser.add_argument('-v', '--verbose', action='store_true', default=False, \
                     help='Increase output messages.')
 
+
 # add -t -a -n and -s as a required, but in a mutually exclusive group
 typegroup = parser.add_mutually_exclusive_group(required=True)
 typegroup.add_argument('-t',  action='store_true', default=False, \
@@ -488,6 +505,7 @@ args = parser.parse_args()
 # Argument          Values      Description
 # args.inputFileName    string file to get data from
 # args.outputFileName   string file to write processed data to
+# args.noBias           True/False Time normalized input file with noBias columns.
 # args.archiveMerge1    string file to merge with input
 # args.archiveMerge2    string file to merge with input
 # args.archiveMerge2    string file to merge with input
@@ -516,6 +534,12 @@ print('**** Begin Processing ****')
 # get start processing time
 procStart = datetime.now()
 print('    Process start time: ' + procStart.strftime('%m/%d/%Y %H:%M:%S'))
+
+# If verbose output is on, issue warning if -noBias option is used
+# without -n option. This isn't a problem, but indicates a possible
+# misunderstanding of the -noBias option.
+if args.verbose and not args.n and args.noBias:
+    print('WARNING: noBias option only used with -n option. Ignoring.')
 
 # **** Convert the start and end times to datetimes if they are specified.
 # Use the dateutil.parser function to get input flexability, and then
@@ -608,7 +632,7 @@ if args.destTimeFormat is not None:
     # a destination time format has been specified. Use it over the other defaults
     # make sure the destination timestamp format argument is a string
     destTimeFormat = str(args.destTimeFormat)
-else
+else:
     # no destination time format specified. Make it the same as the sourceTimeFormat.
     destTimeFormat = sourceTimeFormat
 
@@ -709,7 +733,7 @@ then only one value will be retained.\nThe following column names are duplicated
         print()
 
     # Define a function to merge specified files. Put the internal definition
-    # here, as if only pertains to this file type, and so it can be seen
+    # here, as it only pertains to this file type, and so it can be seen
     # before use
     def _tMerge(fileToMerge, df_base, sep, encoding):
         """
@@ -1177,7 +1201,7 @@ elif args.n and len(headerList) >= 3:
     # normalized time data, and there is at least 1 instrument worth of data.
     # The data is expected to have these columns:
     #     [0] Timestamp
-    #     [1] Time Bias
+    #     [1] Time Bias (if -noBias is False)
     #     [2] Tag 1 Value
     #     ...
     #     [n+1] Tag n Value
@@ -1185,9 +1209,14 @@ elif args.n and len(headerList) >= 3:
     # In the normalized time data case, the first column is the timestamp, and
     # every column after the 3rd is instrument data headered with the instrument
     # name.
-    print('\nNormalized Time Data Specified. The source data is expected to \
+    if not args.noBias:
+        print('\nNormalized Time Data specified. The source data is expected to \
 have the following format:\n\
     TimeStamp, Time Bias, Tag1 Value, Tag2 Value, ...\n')
+    else:
+        print('\nNormalized Time Data specified, with the -noBias option. The source data is expected to \
+have the following format:\n\
+    TimeStamp, Tag1 Value, Tag2 Value, ...\n')
 
     # Deal with duplicates in input file.
     # Duplicates with this data format within the same file are problematic
