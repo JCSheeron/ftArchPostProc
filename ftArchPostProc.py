@@ -434,7 +434,7 @@ option.')
 parser.add_argument('-dtf', '--destTimeFormat', \
                     default=None, metavar='', \
                     help='Specify the format of the destination data time format, \
-as a string. Use the following placeholders:%%m month (zero padded number),
+as a string. Use the following placeholders:%%m month (zero padded number), \
 %%b (month spelled out abbreviated), %%B (month spelled out), %%d day, %%Y 4 digit \
 year, %%y two digit year, %%H hour (24hr format) %%I hour (12 hr format), %%M \
 minute, %%S second, %%f for fractional seconds (e.g. %%S.%%f), %%p AM/PM. \
@@ -608,7 +608,7 @@ if args.destTimeFormat is not None:
     # a destination time format has been specified. Use it over the other defaults
     # make sure the destination timestamp format argument is a string
     destTimeFormat = str(args.destTimeFormat)
-else
+else:
     # no destination time format specified. Make it the same as the sourceTimeFormat.
     destTimeFormat = sourceTimeFormat
 
